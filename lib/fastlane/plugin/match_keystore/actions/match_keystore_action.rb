@@ -127,6 +127,7 @@ module Fastlane
         package_name = params[:package_name]
         apk_path = params[:apk_path]
         existing_keystore = params[:existing_keystore]
+        ci_password = params[:ci_password]
         override_keystore = params[:override_keystore]
 
         keystore_name = 'keystore.jks'
@@ -148,7 +149,11 @@ module Fastlane
 
         key_path = dir_name + '/key.hex'
         if !File.file?(key_path)
-          security_password = other_action.prompt(text: "Security password: ")
+          if ci_password.to_s.strip.empty?
+            security_password = other_action.prompt(text: "Security password: ")
+          else
+            security_password = ci_password
+          end
           self.gen_key(key_path, security_password)
         end
 
@@ -175,7 +180,7 @@ module Fastlane
         properties_encrypt_path = keystoreAppDir + '/' + properties_encrypt_name
 
         # Create keystore with command
-        override_keystore = File.file?(existing_keystore)
+        override_keystore = !existing_keystore.to_s.strip.empty? && File.file?(existing_keystore)
         if !File.file?(keystore_path) || override_keystore 
 
           if File.file?(keystore_path)
@@ -323,6 +328,11 @@ module Fastlane
                                    env_name: "MATCH_KEYSTORE_APK_PATH",
                                 description: "Path of the APK file to sign",
                                    optional: false,
+                                       type: String),
+          FastlaneCore::ConfigItem.new(key: :ci_password,
+                                   env_name: "MATCH_KEYSTORE_CI_PASSWORD",
+                                description: "Password to decrypt keystore.properties file (CI)",
+                                   optional: true,
                                        type: String),
           FastlaneCore::ConfigItem.new(key: :existing_keystore,
                                    env_name: "MATCH_KEYSTORE_EXISTING",
