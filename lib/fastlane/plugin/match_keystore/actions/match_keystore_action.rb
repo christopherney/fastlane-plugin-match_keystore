@@ -84,7 +84,7 @@ module Fastlane
         # https://developer.android.com/studio/command-line/apksigner
         apk_path_signed = apk_path.gsub(".apk", "-signed.apk")
         puts `rm -f #{apk_path_signed}`
-        puts `#{build_tools_path}apksigner sign --ks #{keystore_path} --ks-key-alias #{alias_name} --ks-pass pass:#{alias_password} --key-pass pass:#{key_password} --v1-signing-enabled true --v2-signing-enabled true --out #{apk_path_signed} #{apk_path_aligned}`
+        puts `#{build_tools_path}apksigner sign --ks #{keystore_path} --ks-key-alias '#{alias_name}' --ks-pass pass:'#{alias_password}' --key-pass pass:'#{key_password}' --v1-signing-enabled true --v2-signing-enabled true --out #{apk_path_signed} #{apk_path_aligned}`
     
         puts `#{build_tools_path}apksigner verify #{apk_path_signed}`
         puts `rm -f #{apk_path_aligned}`
@@ -126,6 +126,7 @@ module Fastlane
         git_url = params[:git_url]
         package_name = params[:package_name]
         apk_path = params[:apk_path]
+        existing_keystore = params[:existing_keystore]
         override_keystore = params[:override_keystore]
 
         keystore_name = 'keystore.jks'
@@ -173,8 +174,9 @@ module Fastlane
         properties_path = keystoreAppDir + '/' + properties_name
         properties_encrypt_path = keystoreAppDir + '/' + properties_encrypt_name
 
-         # Create keystore with command
-        if !File.file?(keystore_path) || override_keystore
+        # Create keystore with command
+        override_keystore = File.file?(existing_keystore)
+        if !File.file?(keystore_path) || override_keystore 
 
           if File.file?(keystore_path)
             FileUtils.remove_dir(keystore_path)
@@ -184,25 +186,31 @@ module Fastlane
           alias_name = other_action.prompt(text: "Keystore Alias name: ")
           alias_password = other_action.prompt(text: "Keystore Alias password: ")
 
-          full_name = other_action.prompt(text: "Certificate First and Last Name: ")
-          org_unit = other_action.prompt(text: "Certificate Organisation Unit: ")
-          org = other_action.prompt(text: "Certificate Organisation: ")
-          city_locality = other_action.prompt(text: "Certificate City or Locality: ")
-          state_province = other_action.prompt(text: "Certificate State or Province: ")
-          country = other_action.prompt(text: "Certificate Country Code (XX): ")
-
           # https://developer.android.com/studio/publish/app-signing
-          UI.message("Generating Android Keystore...")
-          keytool_parts = [
-            "keytool -genkey -v",
-            "-keystore #{keystore_path}",
-            "-alias #{alias_name}",
-            "-keyalg RSA -keysize 2048 -validity 10000",
-            "-storepass #{alias_password} ",
-            "-keypass #{key_password}",
-            "-dname \"CN=#{full_name}, OU=#{org_unit}, O=#{org}, L=#{city_locality}, S=#{state_province}, C=#{country}\"",
-          ]
-          sh keytool_parts.join(" ")
+          if !File.file?(existing_keystore)
+            UI.message("Generating Android Keystore...")
+            
+            full_name = other_action.prompt(text: "Certificate First and Last Name: ")
+            org_unit = other_action.prompt(text: "Certificate Organisation Unit: ")
+            org = other_action.prompt(text: "Certificate Organisation: ")
+            city_locality = other_action.prompt(text: "Certificate City or Locality: ")
+            state_province = other_action.prompt(text: "Certificate State or Province: ")
+            country = other_action.prompt(text: "Certificate Country Code (XX): ")
+            
+            keytool_parts = [
+              "keytool -genkey -v",
+              "-keystore #{keystore_path}",
+              "-alias #{alias_name}",
+              "-keyalg RSA -keysize 2048 -validity 10000",
+              "-storepass #{alias_password} ",
+              "-keypass #{key_password}",
+              "-dname \"CN=#{full_name}, OU=#{org_unit}, O=#{org}, L=#{city_locality}, S=#{state_province}, C=#{country}\"",
+            ]
+            sh keytool_parts.join(" ")
+          else
+            UI.message("Copy existing keystore to match_keystore repository...") 
+            puts `cp #{existing_keystore} #{keystore_path}`
+          end
 
           UI.message("Generating Keystore properties...")
          
@@ -249,19 +257,25 @@ module Fastlane
 
         output_signed_apk = ''
         apk_path = self.resolve_apk_path(apk_path)
-        UI.message("APK to sign: " + apk_path)
 
-        if File.file?(keystore_path)
-          UI.message("Signing the APK...")
-          output_signed_apk = self.sign_apk(
-            apk_path, 
-            keystore_path, 
-            key_password, 
-            alias_name, 
-            alias_password, 
-            true
-          )
-        end 
+        if File.file?(apk_path)
+          UI.message("APK to sign: " + apk_path)
+
+          if File.file?(keystore_path)
+
+            UI.message("Signing the APK...")
+            output_signed_apk = self.sign_apk(
+              apk_path, 
+              keystore_path, 
+              key_password, 
+              alias_name, 
+              alias_password, 
+              true
+            )
+          end 
+        else
+          UI.message("No APK file found to sign!")
+        end
 
         output_signed_apk
 
@@ -295,12 +309,12 @@ module Fastlane
 
       def self.available_options
         [
-           FastlaneCore::ConfigItem.new(key: :git_url,
+          FastlaneCore::ConfigItem.new(key: :git_url,
                                    env_name: "MATCH_KEYSTORE_GIT_URL",
                                 description: "The URL of the Git repository (Github, BitBucket...)",
                                    optional: false,
                                        type: String),
-           FastlaneCore::ConfigItem.new(key: :package_name,
+          FastlaneCore::ConfigItem.new(key: :package_name,
                                    env_name: "MATCH_KEYSTORE_PACKAGE_NAME",
                                 description: "The package name of the App",
                                    optional: false,
@@ -310,7 +324,12 @@ module Fastlane
                                 description: "Path of the APK file to sign",
                                    optional: false,
                                        type: String),
-           FastlaneCore::ConfigItem.new(key: :override_keystore,
+          FastlaneCore::ConfigItem.new(key: :existing_keystore,
+                                   env_name: "MATCH_KEYSTORE_EXISTING",
+                                description: "Path of an existing Keystore",
+                                   optional: true,
+                                       type: String),
+          FastlaneCore::ConfigItem.new(key: :override_keystore,
                                    env_name: "MATCH_KEYSTORE_OVERRIDE",
                                 description: "Override an existing Keystore (false by default)",
                                    optional: true,

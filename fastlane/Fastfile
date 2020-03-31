@@ -4,6 +4,7 @@ lane :test do |options|
   	git_url: options[:git_url],
   	package_name: options[:package_name],
     apk_path: options[:apk_path],
+    existing_keystore: options[:existing_keystore],
   	override_keystore: false
   )
 
