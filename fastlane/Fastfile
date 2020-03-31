@@ -1,0 +1,14 @@
+lane :test do |options|
+	
+  match_keystore(
+  	git_url: options[:git_url],
+  	package_name: options[:package_name],
+    apk_path: options[:apk_path],
+  	override_keystore: false
+  )
+
+  puts 'Keystore Path: ' + lane_context[SharedValues::MATCH_KEYSTORE_PATH]
+  puts 'Keystore Password: ' + lane_context[SharedValues::MATCH_KEYSTORE_PASSWORD]
+  puts 'Keystore Alias Name: ' + lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_NAME]
+  puts 'Keystore Alias Password: ' + lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_PASSWORD]
+end
