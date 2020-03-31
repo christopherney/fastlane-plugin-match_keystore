@@ -21,6 +21,10 @@ Easily sync your Android keystores across your team
 ```ruby
 
   lane :release_and_sign do |options|
+  	
+  	gradle(task: "clean")
+    gradle(task: 'assemble', build_type: 'Release')
+
     match_keystore(
       git_url: "https://github.com/<GITHUB_USERNAME>/keystores.git",
       package_name: "com.your.package.name",
