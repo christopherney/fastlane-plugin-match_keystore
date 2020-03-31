@@ -16,6 +16,19 @@ Easily sync your Android keystores across your team
 
 **Note to author:** Add a more detailed description about this plugin here. If your plugin contains multiple actions, make sure to mention them here.
 
+## How to use
+
+```ruby
+
+  lane :release_and_sign do |options|
+    match_keystore(
+      git_url: "https://github.com/<GITHUB_USERNAME>/keystores.git",
+      package_name: "com.your.package.name",
+      apk_path: "/app/build/outputs/apk/app-release.apk"
+    )
+  end
+```
+
 ## Example
 
 Check out the [example `Fastfile`](fastlane/Fastfile) to see how to use this plugin. Try it by cloning the repo, running `fastlane install_plugins` and `bundle exec fastlane test`.
