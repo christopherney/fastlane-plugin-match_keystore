@@ -76,7 +76,7 @@ module Fastlane
         if zip_align == true
           apk_path_aligned = apk_path.gsub(".apk", "-aligned.apk")
           puts `rm -f #{apk_path_aligned}`
-          puts `#{build_tools_path}zipalign -v 4 #{apk_path} #{apk_path_aligned}`
+          puts `#{build_tools_path}zipalign 4 #{apk_path} #{apk_path_aligned}`
         else
           apk_path_aligned = apk_path
         end
@@ -90,6 +90,20 @@ module Fastlane
         puts `rm -f #{apk_path_aligned}`
 
         apk_path_signed
+      end
+
+      def self.resolve_apk_path(apk_path)
+        if !apk_path.to_s.end_with?(".apk") 
+          pattern = File.join(apk_path, '*.apk')
+          files = Dir[pattern]
+          for file in files
+            if file.to_s.end_with?(".apk") && !file.to_s.end_with?("-signed.apk")  
+              apk_path = file
+              break
+            end
+          end
+        end
+        apk_path
       end
 
       def self.run(params)
@@ -218,9 +232,13 @@ module Fastlane
         Actions.lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_NAME] = alias_name
         Actions.lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_PASSWORD] = alias_password
 
+        output_signed_apk = ''
+        apk_path = self.resolve_apk_path(apk_path)
+        UI.message("APK to sign: " + apk_path)
+
         if File.file?(keystore_path)
           UI.message("Signing the APK...")
-          self.sign_apk(
+          output_signed_apk = self.sign_apk(
             apk_path, 
             keystore_path, 
             key_password, 
@@ -229,6 +247,8 @@ module Fastlane
             true
           )
         end 
+
+        output_signed_apk
 
       end
 
@@ -272,7 +292,7 @@ module Fastlane
                                        type: String),
           FastlaneCore::ConfigItem.new(key: :apk_path,
                                    env_name: "MATCH_KEYSTORE_APK_PATH",
-                                description: "Path of the APK file ot sign with Keystore",
+                                description: "Path of the APK file to sign",
                                    optional: false,
                                        type: String),
            FastlaneCore::ConfigItem.new(key: :override_keystore,

@@ -19,9 +19,8 @@ Easily sync your Android keystores across your team
 ## How to use
 
 ```ruby
-
   lane :release_and_sign do |options|
-  	
+
   	gradle(task: "clean")
     gradle(task: 'assemble', build_type: 'Release')
 
