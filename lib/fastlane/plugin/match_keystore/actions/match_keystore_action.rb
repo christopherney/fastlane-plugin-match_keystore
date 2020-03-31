@@ -132,6 +132,7 @@ module Fastlane
 
         keystore_name = 'keystore.jks'
         properties_name = 'keystore.properties'
+        keystore_info_name = 'keystore.txt'
         properties_encrypt_name = 'keystore.properties.enc'
 
         # Check Android Home env:
@@ -234,6 +235,10 @@ module Fastlane
 
           self.encrypt_file(properties_path, properties_encrypt_path, key_path)
           File.delete(properties_path)
+
+          # Print Keystore data in repo:
+          keystore_info_path = keystoreAppDir + '/' + keystore_info_name
+          puts `yes "" | keytool -list -v -keystore #{keystore_path} > #{keystore_info_path}`
           
           UI.message("Upload new Keystore to remote repository...")
           puts `cd #{repo_dir} && git add .`
