@@ -93,7 +93,7 @@ module Fastlane
       end
 
       def self.resolve_apk_path(apk_path)
-        
+
         if !apk_path.to_s.end_with?(".apk") 
 
           if !File.directory?(apk_path)

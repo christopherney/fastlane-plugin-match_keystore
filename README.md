@@ -14,7 +14,13 @@ fastlane add_plugin match_keystore
 
 Easily sync your Android keystores across your team
 
-**Note to author:** Add a more detailed description about this plugin here. If your plugin contains multiple actions, make sure to mention them here.
+This plugin was design based on the 'match' plugin for iOS and code signing concept: https://codesigning.guide/
+
+The idea is to store all you keystores and there credentials in a private and secure Git repository.
+
+The keystore properties are crypted with AES in order to secure sensitive data in the Git repository itself.
+
+With **match_keystore** you can store all your Keystores in secured private repository and share it to your team or your CI system.
 
 ## How to use
 
