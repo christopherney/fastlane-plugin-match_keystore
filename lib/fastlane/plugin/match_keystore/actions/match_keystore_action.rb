@@ -157,6 +157,9 @@ module Fastlane
           FileUtils.mkdir_p(dir_name)
         end
 
+        UI.message("OpenSSL version: ")
+        puts `openssl version`
+
         key_path = dir_name + '/key.hex'
         if !File.file?(key_path)
           if ci_password.to_s.strip.empty?
@@ -166,11 +169,14 @@ module Fastlane
           end
           UI.message "Generating security key..."
           self.gen_key(key_path, security_password)
-        else
-          UI.message "Security key already exists"
         end
+
         tmpkey = self.get_file_content(key_path).strip
-        UI.message "Key: '#{tmpkey}'"
+        if tmpkey.length == 128
+          UI.message "Security key initialized"
+        else
+          raise "The security key format is invalid, or not initialized!"
+        end
 
         repo_dir = dir_name + '/repo'
         unless File.directory?(repo_dir)
