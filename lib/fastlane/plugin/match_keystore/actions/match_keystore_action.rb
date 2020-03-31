@@ -6,9 +6,8 @@ module Fastlane
   module Actions
     module SharedValues
       MATCH_KEYSTORE_PATH = :MATCH_KEYSTORE_PATH
-      MATCH_KEYSTORE_PASSWORD = :MATCH_KEYSTORE_PASSWORD
       MATCH_KEYSTORE_ALIAS_NAME = :MATCH_KEYSTORE_ALIAS_NAME
-      MATCH_KEYSTORE_ALIAS_PASSWORD = :MATCH_KEYSTORE_ALIAS_PASSWORD
+      MATCH_KEYSTORE_APK_SIGNED = :MATCH_KEYSTORE_APK_SIGNED
     end
 
     class MatchKeystoreAction < Action
@@ -32,11 +31,11 @@ module Fastlane
       end
 
       def self.get_android_home
-        puts `rm -f android_home.txt`
-        puts `echo $ANDROID_HOME > android_home.txt`
+        `rm -f android_home.txt`
+        `echo $ANDROID_HOME > android_home.txt`
         data = File.read("android_home.txt")
         android_home = data.strip
-        puts `rm -f android_home.txt`
+        `rm -f android_home.txt`
         android_home
       end
 
@@ -54,18 +53,18 @@ module Fastlane
       end
 
       def self.gen_key(key_path, password)
-        puts `rm -f #{key_path}`
-        puts `echo "#{password}" | openssl dgst -sha512 | cut -c1-128 > #{key_path}`
+        `rm -f #{key_path}`
+        `echo "#{password}" | openssl dgst -sha512 | cut -c1-128 > #{key_path}`
       end
 
       def self.encrypt_file(clear_file, encrypt_file, key_path)
-        puts `rm -f #{encrypt_file}`
-        puts `openssl enc -aes-256-cbc -salt -in #{clear_file} -out #{encrypt_file} -pass file:#{key_path}`
+        `rm -f #{encrypt_file}`
+        `openssl enc -aes-256-cbc -salt -in #{clear_file} -out #{encrypt_file} -pass file:#{key_path}`
       end
 
       def self.decrypt_file(encrypt_file, clear_file, key_path)
-        puts `rm -f #{clear_file}`
-        puts `openssl enc -d -aes-256-cbc -in #{encrypt_file} -out #{clear_file} -pass file:#{key_path}`
+        `rm -f #{clear_file}`
+        `openssl enc -d -aes-256-cbc -in #{encrypt_file} -out #{clear_file} -pass file:#{key_path}`
       end
 
       def self.sign_apk(apk_path, keystore_path, key_password, alias_name, alias_password, zip_align)
@@ -75,19 +74,19 @@ module Fastlane
         # https://developer.android.com/studio/command-line/zipalign
         if zip_align == true
           apk_path_aligned = apk_path.gsub(".apk", "-aligned.apk")
-          puts `rm -f #{apk_path_aligned}`
-          puts `#{build_tools_path}zipalign 4 #{apk_path} #{apk_path_aligned}`
+          `rm -f #{apk_path_aligned}`
+          `#{build_tools_path}zipalign 4 #{apk_path} #{apk_path_aligned}`
         else
           apk_path_aligned = apk_path
         end
 
         # https://developer.android.com/studio/command-line/apksigner
         apk_path_signed = apk_path.gsub(".apk", "-signed.apk")
-        puts `rm -f #{apk_path_signed}`
-        puts `#{build_tools_path}apksigner sign --ks #{keystore_path} --ks-key-alias '#{alias_name}' --ks-pass pass:'#{alias_password}' --key-pass pass:'#{key_password}' --v1-signing-enabled true --v2-signing-enabled true --out #{apk_path_signed} #{apk_path_aligned}`
+        `rm -f #{apk_path_signed}`
+        `#{build_tools_path}apksigner sign --ks #{keystore_path} --ks-key-alias '#{alias_name}' --ks-pass pass:'#{alias_password}' --key-pass pass:'#{key_password}' --v1-signing-enabled true --v2-signing-enabled true --out #{apk_path_signed} #{apk_path_aligned}`
     
-        puts `#{build_tools_path}apksigner verify #{apk_path_signed}`
-        puts `rm -f #{apk_path_aligned}`
+        `#{build_tools_path}apksigner verify #{apk_path_signed}`
+        `rm -f #{apk_path_aligned}`
 
         apk_path_signed
       end
@@ -155,19 +154,24 @@ module Fastlane
           else
             security_password = ci_password
           end
+          UI.message "Generating security key..."
           self.gen_key(key_path, security_password)
+        else
+          UI.message "Security key already exists"
         end
 
         repo_dir = dir_name + '/repo'
         unless File.directory?(repo_dir)
-          UI.message("Creating repository directory...")
+          UI.message("Creating 'repo' directory...")
           FileUtils.mkdir_p(repo_dir)
         end
 
         gitDir = repo_dir + '/.git'
         unless File.directory?(gitDir)
           UI.message("Cloning remote Keystores repository...")
-          puts `git clone #{git_url} #{repo_dir}`
+          puts ''
+          `git clone #{git_url} #{repo_dir}`
+          puts ''
         end
 
         keystoreAppDir = repo_dir + '/' + package_name
@@ -215,7 +219,7 @@ module Fastlane
             sh keytool_parts.join(" ")
           else
             UI.message("Copy existing keystore to match_keystore repository...") 
-            puts `cp #{existing_keystore} #{keystore_path}`
+            `cp #{existing_keystore} #{keystore_path}`
           end
 
           UI.message("Generating Keystore properties...")
@@ -238,12 +242,12 @@ module Fastlane
 
           # Print Keystore data in repo:
           keystore_info_path = keystoreAppDir + '/' + keystore_info_name
-          puts `yes "" | keytool -list -v -keystore #{keystore_path} > #{keystore_info_path}`
+          `yes "" | keytool -list -v -keystore #{keystore_path} > #{keystore_info_path}`
           
           UI.message("Upload new Keystore to remote repository...")
-          puts `cd #{repo_dir} && git add .`
-          puts `cd #{repo_dir} && git commit -m "[ADD] Keystore for app '#{package_name}'."`
-          puts `cd #{repo_dir} && git push`
+          `cd #{repo_dir} && git add .`
+          `cd #{repo_dir} && git commit -m "[ADD] Keystore for app '#{package_name}'."`
+          `cd #{repo_dir} && git push`
 
         else
           UI.message "Keystore file already exists, continue..."
@@ -258,12 +262,6 @@ module Fastlane
           File.delete(properties_path)
 
         end
-
-        UI.message("Preparing Keystore data context...")
-        Actions.lane_context[SharedValues::MATCH_KEYSTORE_PATH] = keystore_path
-        Actions.lane_context[SharedValues::MATCH_KEYSTORE_PASSWORD] = key_password
-        Actions.lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_NAME] = alias_name
-        Actions.lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_PASSWORD] = alias_password
 
         output_signed_apk = ''
         apk_path = self.resolve_apk_path(apk_path)
@@ -287,6 +285,10 @@ module Fastlane
           UI.message("No APK file found to sign!")
         end
 
+        Actions.lane_context[SharedValues::MATCH_KEYSTORE_PATH] = keystore_path
+        Actions.lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_NAME] = alias_name
+        Actions.lane_context[SharedValues::MATCH_KEYSTORE_APK_SIGNED] = output_signed_apk
+
         output_signed_apk
 
       end
@@ -306,9 +308,7 @@ module Fastlane
       def self.output
         [
           ['MATCH_KEYSTORE_PATH', 'File path of the Keystore fot the App.'],
-          ['MATCH_KEYSTORE_PASSWORD', 'Keystore password.'],
-          ['MATCH_KEYSTORE_ALIAS_NAME', 'Keystore Alias Name.'],
-          ['MATCH_KEYSTORE_ALIAS_PASSWORD', 'Keystore Alias Password.']
+          ['MATCH_KEYSTORE_ALIAS_NAME', 'Keystore Alias Name.']
         ]
       end
 

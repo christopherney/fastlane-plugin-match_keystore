@@ -4,12 +4,12 @@ lane :test do |options|
   	git_url: options[:git_url],
   	package_name: options[:package_name],
     apk_path: options[:apk_path],
+    ci_password: options[:ci_password],
     existing_keystore: options[:existing_keystore],
   	override_keystore: false
   )
 
   puts 'Keystore Path: ' + lane_context[SharedValues::MATCH_KEYSTORE_PATH]
-  puts 'Keystore Password: ' + lane_context[SharedValues::MATCH_KEYSTORE_PASSWORD]
   puts 'Keystore Alias Name: ' + lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_NAME]
-  puts 'Keystore Alias Password: ' + lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_PASSWORD]
+  puts 'Signed APK: ' + lane_context[SharedValues::MATCH_KEYSTORE_APK_SIGNED]
 end
