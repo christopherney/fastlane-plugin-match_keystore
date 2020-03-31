@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
   spec.email         = 'christopher.ney@gmail.com'
 
   spec.summary       = 'Easily sync your Android keystores across your team'
-  # spec.homepage      = "https://github.com/<GITHUB_USERNAME>/fastlane-plugin-match_keystore"
+  spec.homepage      = "https://github.com/christopherney/fastlane-plugin-match_keystore"
   spec.license       = "MIT"
 
   spec.files         = Dir["lib/**/*"] + %w(README.md LICENSE)
