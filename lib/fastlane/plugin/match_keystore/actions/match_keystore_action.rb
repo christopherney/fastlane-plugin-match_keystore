@@ -93,11 +93,11 @@ module Fastlane
       end
 
       def self.resolve_apk_path(apk_path)
+        
         if !apk_path.to_s.end_with?(".apk") 
 
           if !File.directory?(apk_path)
             apk_path = File.join(Dir.pwd, apk_path)
-            puts apk_path
           end
 
           pattern = File.join(apk_path, '*.apk')
@@ -108,6 +108,12 @@ module Fastlane
               apk_path = file
               break
             end
+          end
+
+        else
+
+          if !File.file?(apk_path)
+            apk_path = File.join(Dir.pwd, apk_path)
           end
 
         end
