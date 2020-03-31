@@ -1,5 +1,6 @@
 require 'fastlane/action'
 require 'fileutils'
+require 'os'
 require_relative '../helper/match_keystore_helper'
 
 module Fastlane
@@ -54,7 +55,11 @@ module Fastlane
 
       def self.gen_key(key_path, password)
         `rm -f #{key_path}`
-        `echo "#{password}" | openssl dgst -sha512 | cut -c1-128 > #{key_path}`
+        if OS.mac?
+          `echo "#{password}" | openssl dgst -sha512 | cut -c1-128 > #{key_path}`
+        else
+          `echo "#{password}" | openssl dgst -sha512 | awk '{print $2}' | cut -c1-128 > #{key_path}`
+        end
       end
 
       def self.encrypt_file(clear_file, encrypt_file, key_path)
