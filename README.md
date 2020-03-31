@@ -12,7 +12,7 @@ fastlane add_plugin match_keystore
 
 ## About match_keystore
 
-Easily sync your Android keystores across your team
+Easily sync your Android keystores across your team.
 
 This plugin was design based on the 'match' plugin and code signing concept: https://codesigning.guide/
 
@@ -28,11 +28,14 @@ The keystore properties are encrypted with AES in order to secure sensitive data
   	gradle(task: "clean")
     gradle(task: 'assemble', build_type: 'Release')
 
-    match_keystore(
-      git_url: "https://github.com/<GITHUB_USERNAME>/keystores.git",
+    signed_apk_path = match_keystore(
+      git_url: "https://github.com/<GITHUB_USERNAME>/keystores.git", # Please use a private Git repository !
       package_name: "com.your.package.name",
-      apk_path: "/app/build/outputs/apk/app-release.apk"
+      apk_path: "/app/build/outputs/apk/app-release.apk" # Or path without APK: /app/build/outputs/apk/
     )
+
+    # Return the path of signed APK (useful for other lanes such as `publish_to_firebase`, `upload_to_play_store`)
+    puts signed_apk_path
   end
 ```
 
