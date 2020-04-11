@@ -52,24 +52,28 @@ module Fastlane
 
         build_tools_last_version
       end
+      
+      def self.check_openssl_version
+        output = `openssl version`
+        if !output.start_with?("OpenSSL")
+          raise "Please install OpenSSL 1.1.1 at least https://www.openssl.org/"
+        end
+        UI.message("OpenSSL version: " + output.strip)
+      end
 
       def self.gen_key(key_path, password)
         `rm -f #{key_path}`
-        if OS.mac?
-          `echo "#{password}" | openssl dgst -sha512 | cut -c1-128 > #{key_path}`
-        else
-          `echo "#{password}" | openssl dgst -sha512 | awk '{print $2}' | cut -c1-128 > #{key_path}`
-        end
+        `echo "#{password}" | openssl dgst -sha512 | awk '{print $2}' | cut -c1-128 > #{key_path}`
       end
 
       def self.encrypt_file(clear_file, encrypt_file, key_path)
         `rm -f #{encrypt_file}`
-        `openssl enc -aes-256-cbc -salt -in #{clear_file} -out #{encrypt_file} -pass file:#{key_path}`
+        `openssl enc -aes-256-cbc -salt -pbkdf2 -in #{clear_file} -out #{encrypt_file} -pass file:#{key_path}`
       end
 
       def self.decrypt_file(encrypt_file, clear_file, key_path)
         `rm -f #{clear_file}`
-        `openssl enc -d -aes-256-cbc -in #{encrypt_file} -out #{clear_file} -pass file:#{key_path}`
+        `openssl enc -d -aes-256-cbc -pbkdf2 -in #{encrypt_file} -out #{clear_file} -pass file:#{key_path}`
       end
 
       def self.sign_apk(apk_path, keystore_path, key_password, alias_name, alias_password, zip_align)
@@ -151,21 +155,20 @@ module Fastlane
           raise "The environment variable ANDROID_HOME is not defined, or Android SDK is not installed!"
         end
 
+        # Check OpenSSL:
+        self.check_openssl_version
+
         dir_name = ENV['HOME'] + '/.match_keystore'
         unless File.directory?(dir_name)
           UI.message("Creating '.match_keystore' working directory...")
           FileUtils.mkdir_p(dir_name)
         end
 
-        UI.message("OpenSSL version: ")
-        puts `openssl version`
-
         key_path = dir_name + '/key.hex'
         if !File.file?(key_path)
-          if ci_password.to_s.strip.empty?
-            security_password = other_action.prompt(text: "Security password: ")
-          else
-            security_password = ci_password
+          security_password = other_action.prompt(text: "Security password: ", secure_text: true, ci_input: ci_password)
+          if security_password.to_s.strip.empty?
+            raise "Security password is not defined! Please use 'ci_password' parameter for CI."
           end
           UI.message "Generating security key..."
           self.gen_key(key_path, security_password)
@@ -211,8 +214,17 @@ module Fastlane
           end
 
           key_password = other_action.prompt(text: "Keystore Password: ")
+          if key_password.to_s.strip.empty?
+            raise "Keystore Password is not definined!"
+          end
           alias_name = other_action.prompt(text: "Keystore Alias name: ")
+          if alias_name.to_s.strip.empty?
+            raise "Keystore Alias name is not definined!"
+          end
           alias_password = other_action.prompt(text: "Keystore Alias password: ")
+          if alias_password.to_s.strip.empty?
+            raise "Keystore Alias password is not definined!"
+          end
 
           # https://developer.android.com/studio/publish/app-signing
           if !File.file?(existing_keystore)
@@ -326,7 +338,8 @@ module Fastlane
       def self.output
         [
           ['MATCH_KEYSTORE_PATH', 'File path of the Keystore fot the App.'],
-          ['MATCH_KEYSTORE_ALIAS_NAME', 'Keystore Alias Name.']
+          ['MATCH_KEYSTORE_ALIAS_NAME', 'Keystore Alias Name.'],
+          ['MATCH_KEYSTORE_APK_SIGNED', 'Path of the signed APK.']
         ]
       end
 
