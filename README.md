@@ -24,7 +24,7 @@ The keystore properties are encrypted with AES in order to secure sensitive data
 
 ```ruby
   lane :release_and_sign do |options|
-  	gradle(task: "clean")
+    gradle(task: "clean")
     gradle(task: 'assemble', build_type: 'Release')
 
     signed_apk_path = match_keystore(
