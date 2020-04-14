@@ -1,6 +1,8 @@
 require 'fastlane/action'
 require 'fileutils'
 require 'os'
+require 'json'
+require 'digest'
 require_relative '../helper/match_keystore_helper'
 
 module Fastlane
@@ -12,6 +14,17 @@ module Fastlane
     end
 
     class MatchKeystoreAction < Action
+
+      def self.to_md5(value)
+        hash_value = Digest::MD5.hexdigest value
+        hash_value
+      end
+
+      def self.load_json(json_path)
+        file = File.read(json_path)
+        data_hash = JSON.parse(file)
+        data_hash
+      end
 
       def self.load_properties(properties_filename)
         properties = {}
@@ -107,6 +120,11 @@ module Fastlane
 
       def self.resolve_apk_path(apk_path)
 
+        # Set default APK path if not set:
+        if apk_path.to_s.strip.empty?
+          apk_path = '/app/build/outputs/apk/'
+        end
+
         if !apk_path.to_s.end_with?(".apk") 
 
           if !File.directory?(apk_path)
@@ -134,15 +152,28 @@ module Fastlane
         apk_path
       end
 
+      def self.prompt2(params)
+        # UI.message("prompt2: #{params[:value]}")
+        if params[:value].to_s.empty?
+          return_value = other_action.prompt(text: params[:text], secure_text: params[:secure_text], ci_input: params[:ci_input])
+        else
+          return_value = params[:value]
+        end
+        return_value
+      end
+
       def self.run(params)
 
+        # Get input parameters:
         git_url = params[:git_url]
         package_name = params[:package_name]
         apk_path = params[:apk_path]
         existing_keystore = params[:existing_keystore]
-        ci_password = params[:ci_password]
+        match_secret = params[:match_secret]
         override_keystore = params[:override_keystore]
+        keystore_data = params[:keystore_data]
 
+        # Init constants:
         keystore_name = 'keystore.jks'
         properties_name = 'keystore.properties'
         keystore_info_name = 'keystore.txt'
@@ -158,35 +189,43 @@ module Fastlane
         # Check OpenSSL:
         self.check_openssl_version
 
+        # Init workign local directory:
         dir_name = ENV['HOME'] + '/.match_keystore'
         unless File.directory?(dir_name)
           UI.message("Creating '.match_keystore' working directory...")
           FileUtils.mkdir_p(dir_name)
         end
 
-        key_path = dir_name + '/key.hex'
+        # Init 'security password' for AES encryption:
+        key_name = "#{self.to_md5(git_url)}.hex"
+        key_path = File.join(dir_name, key_name)
+        # UI.message(key_path)
         if !File.file?(key_path)
-          security_password = other_action.prompt(text: "Security password: ", secure_text: true, ci_input: ci_password)
+          security_password = self.prompt2(text: "Security password: ", secure_text: true, value: match_secret)
           if security_password.to_s.strip.empty?
-            raise "Security password is not defined! Please use 'ci_password' parameter for CI."
+            raise "Security password is not defined! Please use 'match_secret' parameter for CI."
           end
-          UI.message "Generating security key..."
+          UI.message "Generating security key '#{key_name}.hex'..."
           self.gen_key(key_path, security_password)
         end
 
+        # Check is 'security password' is well initialized:
         tmpkey = self.get_file_content(key_path).strip
         if tmpkey.length == 128
-          UI.message "Security key initialized"
+          UI.message "Security key '#{key_name}.hex' initialized"
         else
-          raise "The security key format is invalid, or not initialized!"
+          raise "The security key '#{key_name}.hex' is malformed, or not initialized!"
         end
 
-        repo_dir = dir_name + '/repo'
+        # Create repo directory to sync remote Keystores repository:
+        repo_dir = File.join(dir_name, self.to_md5(git_url))
+        # UI.message(repo_dir)
         unless File.directory?(repo_dir)
           UI.message("Creating 'repo' directory...")
           FileUtils.mkdir_p(repo_dir)
         end
 
+        # Cloning GIT remote repository:
         gitDir = repo_dir + '/.git'
         unless File.directory?(gitDir)
           UI.message("Cloning remote Keystores repository...")
@@ -195,6 +234,10 @@ module Fastlane
           puts ''
         end
 
+        # Create sub-directory for Android app:
+        if package_name.to_s.strip.empty?
+          raise "Package name is not defined!"
+        end
         keystoreAppDir = repo_dir + '/' + package_name
         unless File.directory?(keystoreAppDir)
           UI.message("Creating '#{package_name}' keystore directory...")
@@ -205,6 +248,20 @@ module Fastlane
         properties_path = keystoreAppDir + '/' + properties_name
         properties_encrypt_path = keystoreAppDir + '/' + properties_encrypt_name
 
+        # Load parameters from JSON for CI or Unit Tests:
+        if keystore_data != nil && File.file?(keystore_data)
+          data_json = self.load_json(keystore_data)
+          data_key_password = data_json['key_password']
+          data_alias_name = data_json['alias_name']
+          data_alias_password = data_json['alias_password']
+          data_full_name = data_json['full_name']
+          data_org_unit = data_json['org_unit']
+          data_org = data_json['org']
+          data_city_locality = data_json['city_locality']
+          data_state_province = data_json['state_province']
+          data_country = data_json['country']
+        end
+
         # Create keystore with command
         override_keystore = !existing_keystore.to_s.strip.empty? && File.file?(existing_keystore)
         if !File.file?(keystore_path) || override_keystore 
@@ -213,15 +270,15 @@ module Fastlane
             FileUtils.remove_dir(keystore_path)
           end
 
-          key_password = other_action.prompt(text: "Keystore Password: ")
+          key_password = self.prompt2(text: "Keystore Password: ", value: data_key_password)
           if key_password.to_s.strip.empty?
             raise "Keystore Password is not definined!"
           end
-          alias_name = other_action.prompt(text: "Keystore Alias name: ")
+          alias_name = self.prompt2(text: "Keystore Alias name: ", value: data_alias_name)
           if alias_name.to_s.strip.empty?
             raise "Keystore Alias name is not definined!"
           end
-          alias_password = other_action.prompt(text: "Keystore Alias password: ")
+          alias_password = self.prompt2(text: "Keystore Alias password: ", value: data_alias_password)
           if alias_password.to_s.strip.empty?
             raise "Keystore Alias password is not definined!"
           end
@@ -230,12 +287,12 @@ module Fastlane
           if !File.file?(existing_keystore)
             UI.message("Generating Android Keystore...")
             
-            full_name = other_action.prompt(text: "Certificate First and Last Name: ")
-            org_unit = other_action.prompt(text: "Certificate Organisation Unit: ")
-            org = other_action.prompt(text: "Certificate Organisation: ")
-            city_locality = other_action.prompt(text: "Certificate City or Locality: ")
-            state_province = other_action.prompt(text: "Certificate State or Province: ")
-            country = other_action.prompt(text: "Certificate Country Code (XX): ")
+            full_name = self.prompt2(text: "Certificate First and Last Name: ", value: data_full_name)
+            org_unit = self.prompt2(text: "Certificate Organisation Unit: ", value: data_org_unit)
+            org = self.prompt2(text: "Certificate Organisation: ", value: data_org)
+            city_locality = self.prompt2(text: "Certificate City or Locality: ", value: data_city_locality) 
+            state_province = self.prompt2(text: "Certificate State or Province: ", value: data_state_province)
+            country = self.prompt2(text: "Certificate Country Code (XX): ", value: data_country)
             
             keytool_parts = [
               "keytool -genkey -v",
@@ -272,14 +329,16 @@ module Fastlane
 
           # Print Keystore data in repo:
           keystore_info_path = keystoreAppDir + '/' + keystore_info_name
-          `yes "" | keytool -list -v -keystore #{keystore_path} > #{keystore_info_path}`
+          `yes "" | keytool -list -v -keystore #{keystore_path} -storepass #{key_password} > #{keystore_info_path}`
           
           UI.message("Upload new Keystore to remote repository...")
+          puts `echo ""`
           `cd #{repo_dir} && git add .`
           `cd #{repo_dir} && git commit -m "[ADD] Keystore for app '#{package_name}'."`
           `cd #{repo_dir} && git push`
+          puts `echo ""`
 
-        else
+        else  
           UI.message "Keystore file already exists, continue..."
 
           self.decrypt_file(properties_encrypt_path, properties_path, key_path)
@@ -290,37 +349,40 @@ module Fastlane
           alias_password = properties['aliasPassword']
 
           File.delete(properties_path)
-
         end
 
+        # Resolve path to the APK to sign:
         output_signed_apk = ''
         apk_path = self.resolve_apk_path(apk_path)
 
+        # Sign APK:
         if File.file?(apk_path)
           UI.message("APK to sign: " + apk_path)
 
           if File.file?(keystore_path)
 
             UI.message("Signing the APK...")
+            puts `echo ""`
             output_signed_apk = self.sign_apk(
               apk_path, 
               keystore_path, 
               key_password, 
               alias_name, 
               alias_password, 
-              true
+              true # Zip align
             )
+            puts `echo ""`
           end 
         else
           UI.message("No APK file found to sign!")
         end
 
+        # Prepare contect shared values for next lanes:
         Actions.lane_context[SharedValues::MATCH_KEYSTORE_PATH] = keystore_path
         Actions.lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_NAME] = alias_name
         Actions.lane_context[SharedValues::MATCH_KEYSTORE_APK_SIGNED] = output_signed_apk
 
         output_signed_apk
-
       end
 
       def self.description
@@ -363,11 +425,11 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :apk_path,
                                    env_name: "MATCH_KEYSTORE_APK_PATH",
                                 description: "Path of the APK file to sign",
-                                   optional: false,
+                                   optional: true,
                                        type: String),
-          FastlaneCore::ConfigItem.new(key: :ci_password,
-                                   env_name: "MATCH_KEYSTORE_CI_PASSWORD",
-                                description: "Password to decrypt keystore.properties file (CI)",
+          FastlaneCore::ConfigItem.new(key: :match_secret,
+                                   env_name: "MATCH_KEYSTORE_SECRET",
+                                description: "Secret to decrypt keystore.properties file (CI)",
                                    optional: true,
                                        type: String),
           FastlaneCore::ConfigItem.new(key: :existing_keystore,
@@ -379,7 +441,12 @@ module Fastlane
                                    env_name: "MATCH_KEYSTORE_OVERRIDE",
                                 description: "Override an existing Keystore (false by default)",
                                    optional: true,
-                                       type: Boolean)
+                                       type: Boolean),
+          FastlaneCore::ConfigItem.new(key: :keystore_data,
+                                   env_name: "MATCH_KEYSTORE_JSON_PATH",
+                                description: "Required data to import an existing keystore, or create a new one",
+                                   optional: true,
+                                       type: String)
         ]
       end
 

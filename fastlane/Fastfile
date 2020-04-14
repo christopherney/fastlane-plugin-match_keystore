@@ -1,12 +1,13 @@
 lane :test do |options|
-	
+
   match_keystore(
-  	git_url: options[:git_url],
-  	package_name: options[:package_name],
-    apk_path: options[:apk_path],
-    ci_password: options[:ci_password],
-    existing_keystore: options[:existing_keystore],
-  	override_keystore: false
+  	git_url: "https://github.com/christopherney/fake-keystores",
+  	package_name: "com.match-keystore-plugin.test",
+    apk_path: "assets/app-release-unsigned.apk",
+    match_secret: "A-very-str0ng-password!",
+    existing_keystore: "assets/existing-keystore.jks",
+  	override_keystore: true,
+    keystore_data: "assets/keystore.json"
   )
 
   puts 'Keystore Path: ' + lane_context[SharedValues::MATCH_KEYSTORE_PATH]
