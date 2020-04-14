@@ -55,7 +55,7 @@ module Fastlane
 
       def self.get_build_tools
         android_home = self.get_android_home()
-        build_tools_root = android_home + '/build-tools'
+        build_tools_root = File.join(android_home, '/build-tools')
 
         sub_dirs = Dir.glob(File.join(build_tools_root, '*', ''))
         build_tools_last_version = ''
@@ -75,18 +75,18 @@ module Fastlane
       end
 
       def self.gen_key(key_path, password)
-        `rm -f #{key_path}`
-        `echo "#{password}" | openssl dgst -sha512 | awk '{print $2}' | cut -c1-128 > #{key_path}`
+        `rm -f '#{key_path}'`
+        `echo "#{password}" | openssl dgst -sha512 | awk '{print $2}' | cut -c1-128 > '#{key_path}'`
       end
 
       def self.encrypt_file(clear_file, encrypt_file, key_path)
-        `rm -f #{encrypt_file}`
-        `openssl enc -aes-256-cbc -salt -pbkdf2 -in #{clear_file} -out #{encrypt_file} -pass file:#{key_path}`
+        `rm -f '#{encrypt_file}'`
+        `openssl enc -aes-256-cbc -salt -pbkdf2 -in '#{clear_file}' -out '#{encrypt_file}' -pass file:'#{key_path}'`
       end
 
       def self.decrypt_file(encrypt_file, clear_file, key_path)
-        `rm -f #{clear_file}`
-        `openssl enc -d -aes-256-cbc -pbkdf2 -in #{encrypt_file} -out #{clear_file} -pass file:#{key_path}`
+        `rm -f '#{clear_file}'`
+        `openssl enc -d -aes-256-cbc -pbkdf2 -in '#{encrypt_file}' -out '#{clear_file}' -pass file:'#{key_path}'`
       end
 
       def self.sign_apk(apk_path, keystore_path, key_password, alias_name, alias_password, zip_align)
@@ -96,8 +96,8 @@ module Fastlane
         # https://developer.android.com/studio/command-line/zipalign
         if zip_align == true
           apk_path_aligned = apk_path.gsub(".apk", "-aligned.apk")
-          `rm -f #{apk_path_aligned}`
-          `#{build_tools_path}zipalign 4 #{apk_path} #{apk_path_aligned}`
+          `rm -f '#{apk_path_aligned}'`
+          `#{build_tools_path}zipalign 4 '#{apk_path}' '#{apk_path_aligned}'`
         else
           apk_path_aligned = apk_path
         end
@@ -106,11 +106,11 @@ module Fastlane
         apk_path_signed = apk_path_signed.gsub("--", "-")
 
         # https://developer.android.com/studio/command-line/apksigner
-        `rm -f #{apk_path_signed}`
-        `#{build_tools_path}apksigner sign --ks #{keystore_path} --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true --out #{apk_path_signed} #{apk_path_aligned}`
+        `rm -f '#{apk_path_signed}'`
+        `#{build_tools_path}apksigner sign --ks '#{keystore_path}' --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true --out '#{apk_path_signed}' '#{apk_path_aligned}'`
         
-        `#{build_tools_path}apksigner verify #{apk_path_signed}`
-        `rm -f #{apk_path_aligned}`
+        `#{build_tools_path}apksigner verify '#{apk_path_signed}'`
+        `rm -f '#{apk_path_aligned}'`
 
         apk_path_signed
       end
@@ -228,7 +228,7 @@ module Fastlane
         end
 
         # Cloning GIT remote repository:
-        gitDir = repo_dir + '/.git'
+        gitDir = File.join(repo_dir, '/.git')
         unless File.directory?(gitDir)
           UI.message("Cloning remote Keystores repository...")
           puts ''
@@ -240,15 +240,15 @@ module Fastlane
         if package_name.to_s.strip.empty?
           raise "Package name is not defined!"
         end
-        keystoreAppDir = repo_dir + '/' + package_name
+        keystoreAppDir = File.join(repo_dir, package_name)
         unless File.directory?(keystoreAppDir)
           UI.message("Creating '#{package_name}' keystore directory...")
           FileUtils.mkdir_p(keystoreAppDir)
         end
 
-        keystore_path = keystoreAppDir + '/' + keystore_name
-        properties_path = keystoreAppDir + '/' + properties_name
-        properties_encrypt_path = keystoreAppDir + '/' + properties_encrypt_name
+        keystore_path = File.join(keystoreAppDir, keystore_name)
+        properties_path = File.join(keystoreAppDir, properties_name)
+        properties_encrypt_path = File.join(keystoreAppDir, properties_encrypt_name)
 
         # Load parameters from JSON for CI or Unit Tests:
         if keystore_data != nil && File.file?(keystore_data)
@@ -298,11 +298,11 @@ module Fastlane
             
             keytool_parts = [
               "keytool -genkey -v",
-              "-keystore #{keystore_path}",
-              "-alias #{alias_name}",
+              "-keystore '#{keystore_path}'",
+              "-alias '#{alias_name}'",
               "-keyalg RSA -keysize 2048 -validity 10000",
-              "-storepass #{alias_password} ",
-              "-keypass #{key_password}",
+              "-storepass '#{alias_password}'",
+              "-keypass '#{key_password}'",
               "-dname \"CN=#{full_name}, OU=#{org_unit}, O=#{org}, L=#{city_locality}, S=#{state_province}, C=#{country}\"",
             ]
             sh keytool_parts.join(" ")
@@ -317,6 +317,7 @@ module Fastlane
             FileUtils.remove_dir(properties_path)
           end
         
+          # Build URL:
           store_file = git_url + '/' + package_name + '/' + keystore_name
 
           out_file = File.new(properties_path, "w")
@@ -330,14 +331,14 @@ module Fastlane
           File.delete(properties_path)
 
           # Print Keystore data in repo:
-          keystore_info_path = keystoreAppDir + '/' + keystore_info_name
-          `yes "" | keytool -list -v -keystore #{keystore_path} -storepass #{key_password} > #{keystore_info_path}`
+          keystore_info_path = File.join(keystoreAppDir, keystore_info_name)
+          `yes "" | keytool -list -v -keystore '#{keystore_path}' -storepass '#{key_password}' > '#{keystore_info_path}'`
           
           UI.message("Upload new Keystore to remote repository...")
           puts ''
-          `cd #{repo_dir} && git add .`
-          `cd #{repo_dir} && git commit -m "[ADD] Keystore for app '#{package_name}'."`
-          `cd #{repo_dir} && git push`
+          `cd '#{repo_dir}' && git add .`
+          `cd '#{repo_dir}' && git commit -m "[ADD] Keystore for app '#{package_name}'."`
+          `cd '#{repo_dir}' && git push`
           puts ''
 
         else  
