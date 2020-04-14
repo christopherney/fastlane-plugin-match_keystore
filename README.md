@@ -31,6 +31,11 @@ The keystore properties are encrypted with AES in order to secure sensitive data
       git_url: "https://github.com/<GITHUB_USERNAME>/keystores.git", # Please use a private Git repository !
       package_name: "com.your.package.name",
       apk_path: "/app/build/outputs/apk/app-release.apk" # Or path without APK: /app/build/outputs/apk/
+      # Optional:
+      match_secret: "A-very-str0ng-password!", # The secret use to encrypt/decrypt Keystore passwords on Git repo (for CI)
+      existing_keystore: "assets/existing-keystore.jks", # Optional, if needed to import an existing keystore
+      override_keystore: true, # Optional, override an existing Keystore on Git repo
+      keystore_data: "assets/keystore.json" # Optional, all data required to create a new Keystore (use to bypass prompt)
     )
 
     # Return the path of signed APK (useful for other lanes such as `publish_to_firebase`, `upload_to_play_store`)
