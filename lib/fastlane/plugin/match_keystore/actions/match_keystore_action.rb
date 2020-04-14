@@ -101,12 +101,14 @@ module Fastlane
         else
           apk_path_aligned = apk_path
         end
+        apk_path_signed = apk_path.gsub(".apk", "-signed.apk")
+        apk_path_signed = apk_path_signed.gsub("unsigned", "")
+        apk_path_signed = apk_path_signed.gsub("--", "-")
 
         # https://developer.android.com/studio/command-line/apksigner
-        apk_path_signed = apk_path.gsub(".apk", "-signed.apk")
         `rm -f #{apk_path_signed}`
-        `#{build_tools_path}apksigner sign --ks #{keystore_path} --ks-key-alias '#{alias_name}' --ks-pass pass:'#{alias_password}' --key-pass pass:'#{key_password}' --v1-signing-enabled true --v2-signing-enabled true --out #{apk_path_signed} #{apk_path_aligned}`
-    
+        `#{build_tools_path}apksigner sign --ks #{keystore_path} --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true --out #{apk_path_signed} #{apk_path_aligned}`
+        
         `#{build_tools_path}apksigner verify #{apk_path_signed}`
         `rm -f #{apk_path_aligned}`
 
@@ -332,11 +334,11 @@ module Fastlane
           `yes "" | keytool -list -v -keystore #{keystore_path} -storepass #{key_password} > #{keystore_info_path}`
           
           UI.message("Upload new Keystore to remote repository...")
-          puts `echo ""`
+          puts ''
           `cd #{repo_dir} && git add .`
           `cd #{repo_dir} && git commit -m "[ADD] Keystore for app '#{package_name}'."`
           `cd #{repo_dir} && git push`
-          puts `echo ""`
+          puts ''
 
         else  
           UI.message "Keystore file already exists, continue..."
@@ -362,7 +364,7 @@ module Fastlane
           if File.file?(keystore_path)
 
             UI.message("Signing the APK...")
-            puts `echo ""`
+            puts ''
             output_signed_apk = self.sign_apk(
               apk_path, 
               keystore_path, 
@@ -371,7 +373,7 @@ module Fastlane
               alias_password, 
               true # Zip align
             )
-            puts `echo ""`
+            puts ''
           end 
         else
           UI.message("No APK file found to sign!")
