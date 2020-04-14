@@ -207,16 +207,16 @@ module Fastlane
           if security_password.to_s.strip.empty?
             raise "Security password is not defined! Please use 'match_secret' parameter for CI."
           end
-          UI.message "Generating security key '#{key_name}.hex'..."
+          UI.message "Generating security key '#{key_name}'..."
           self.gen_key(key_path, security_password)
         end
 
         # Check is 'security password' is well initialized:
         tmpkey = self.get_file_content(key_path).strip
         if tmpkey.length == 128
-          UI.message "Security key '#{key_name}.hex' initialized"
+          UI.message "Security key '#{key_name}' initialized"
         else
-          raise "The security key '#{key_name}.hex' is malformed, or not initialized!"
+          raise "The security key '#{key_name}' is malformed, or not initialized!"
         end
 
         # Create repo directory to sync remote Keystores repository:
