@@ -227,12 +227,17 @@ module Fastlane
           FileUtils.mkdir_p(repo_dir)
         end
 
-        # Cloning GIT remote repository:
+        # Cloning/pulling GIT remote repository:
         gitDir = File.join(repo_dir, '/.git')
-        unless File.directory?(gitDir)
+        if !File.directory?(gitDir)
           UI.message("Cloning remote Keystores repository...")
           puts ''
           `git clone #{git_url} #{repo_dir}`
+          puts ''
+        else
+          UI.message("Pulling remote Keystores repository...")
+          puts ''
+          `cd #{repo_dir} && git pull`
           puts ''
         end
 
