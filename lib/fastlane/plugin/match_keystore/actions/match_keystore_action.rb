@@ -97,8 +97,10 @@ module Fastlane
         if zip_align == true
           apk_path_aligned = apk_path.gsub(".apk", "-aligned.apk")
           `rm -f '#{apk_path_aligned}'`
+          UI.message("Aligning APK (zipalign): #{apk_path_aligned}")
           `#{build_tools_path}zipalign 4 '#{apk_path}' '#{apk_path_aligned}'`
         else
+          UI.message("No zip align!")
           apk_path_aligned = apk_path
         end
         apk_path_signed = apk_path.gsub(".apk", "-signed.apk")
