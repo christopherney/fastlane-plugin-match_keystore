@@ -92,13 +92,14 @@ module Fastlane
       def self.sign_apk(apk_path, keystore_path, key_password, alias_name, alias_password, zip_align)
 
         build_tools_path = self.get_build_tools()
+        UI.message("BUild tools path: #{build_tools_path}")
 
         # https://developer.android.com/studio/command-line/zipalign
         if zip_align == true
           apk_path_aligned = apk_path.gsub(".apk", "-aligned.apk")
           `rm -f '#{apk_path_aligned}'`
           UI.message("Aligning APK (zipalign): #{apk_path_aligned}")
-          `#{build_tools_path}zipalign 4 '#{apk_path}' '#{apk_path_aligned}'`
+          `#{build_tools_path}zipalign -f -c -v 4 '#{apk_path}' '#{apk_path_aligned}'`
         else
           UI.message("No zip align!")
           apk_path_aligned = apk_path
