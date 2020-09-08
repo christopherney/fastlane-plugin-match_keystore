@@ -63,17 +63,31 @@ module Fastlane
         android_home
       end
 
-      def self.get_build_tools
+      def self.get_build_tools_version(targeted_version)
+        path = self.get_build_tools(targeted_version)
+        version = path.split('/').last
+        version
+      end
+
+      def self.get_build_tools(targeted_version)
         android_home = self.get_android_home()
         build_tools_root = File.join(android_home, '/build-tools')
 
-        sub_dirs = Dir.glob(File.join(build_tools_root, '*', ''))
-        build_tools_last_version = ''
-        for sub_dir in sub_dirs
-          build_tools_last_version = sub_dir
+        build_tools_path = ""
+        if !targeted_version.to_s.strip.empty?
+          build_tools_path = File.join(build_tools_root, "/#{targeted_version}/")
         end
 
-        build_tools_last_version
+        if !File.directory?(build_tools_path)
+          sub_dirs = Dir.glob(File.join(build_tools_root, '*', ''))
+          build_tools_last_version = ''
+          for sub_dir in sub_dirs
+            build_tools_last_version = sub_dir
+          end
+          build_tools_path = build_tools_last_version
+        end
+      
+        build_tools_path
       end
       
       def self.check_ssl_version(forceOpenSSL)
@@ -231,9 +245,9 @@ module Fastlane
 
       end
 
-      def self.sign_apk(apk_path, keystore_path, key_password, alias_name, alias_password, zip_align)
+      def self.sign_apk(apk_path, keystore_path, key_password, alias_name, alias_password, zip_align, version_targeted)
 
-        build_tools_path = self.get_build_tools()
+        build_tools_path = self.get_build_tools(version_targeted)
         UI.message("Build-tools path: #{build_tools_path}")
 
         # https://developer.android.com/studio/command-line/zipalign
@@ -260,7 +274,13 @@ module Fastlane
         # https://developer.android.com/studio/command-line/apksigner
         `rm -f '#{apk_path_signed}'`
         UI.message("Signing APK: #{apk_path_aligned}")
-        output = `#{build_tools_path}apksigner sign --ks '#{keystore_path}' --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true --v4-signing-enabled false --out '#{apk_path_signed}' '#{apk_path_aligned}'`
+        apksigner_opts = ""
+        build_tools_version = self.get_build_tools_version(version_targeted)
+        UI.message("Build-tools version: #{build_tools_version}")
+        if Gem::Version.new(build_tools_version) >= Gem::Version.new('30')
+          apksigner_opts = "--v4-signing-enabled false "
+        end
+        output = `#{build_tools_path}apksigner sign --ks '#{keystore_path}' --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true #{apksigner_opts}--out '#{apk_path_signed}' '#{apk_path_aligned}'`
         puts ""
         puts output
 
@@ -346,6 +366,7 @@ module Fastlane
         keystore_data = params[:keystore_data]
         clear_keystore = params[:clear_keystore]
         unit_test = params[:unit_test]
+        build_tools_version = params[:build_tools_version]
 
         # Test OpenSSL/LibreSSL
         if unit_test
@@ -558,7 +579,8 @@ module Fastlane
               key_password, 
               alias_name, 
               alias_password, 
-              true # Zip align
+              true, # Zip align
+              build_tools_version # Buil-tools version
             )
             puts ''
           end 
@@ -636,6 +658,11 @@ module Fastlane
                                 description: "Required data to import an existing keystore, or create a new one",
                                    optional: true,
                                        type: String),
+          FastlaneCore::ConfigItem.new(key: :build_tools_version,
+                                   env_name: "MATCH_KEYSTORE_BUILD_TOOLS_VERSION",
+                                description: "Set built-tools version (by default latest available on machine)",
+                                   optional: true,
+                                       type: String),                             
           FastlaneCore::ConfigItem.new(key: :clear_keystore,
                                    env_name: "MATCH_KEYSTORE_CLEAR",
                                 description: "Clear the local keystore (false by default)",
