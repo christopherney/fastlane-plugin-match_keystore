@@ -251,7 +251,7 @@ module Fastlane
         UI.message("Build-tools path: #{build_tools_path}")
 
         # https://developer.android.com/studio/command-line/zipalign
-        if zip_align == true
+        if zip_align != false
           apk_path_aligned = apk_path.gsub(".apk", "-aligned.apk")
           `rm -f '#{apk_path_aligned}'`
           UI.message("Aligning APK (zipalign): #{apk_path}")
@@ -264,7 +264,7 @@ module Fastlane
           end
 
         else
-          UI.message("No zip align!")
+          UI.message("No zip align - deactivated via parameter!")
           apk_path_aligned = apk_path
         end
         apk_path_signed = apk_path.gsub(".apk", "-signed.apk")
@@ -288,7 +288,9 @@ module Fastlane
         output = `#{build_tools_path}apksigner verify '#{apk_path_signed}'`
         puts ""
         puts output
-        `rm -f '#{apk_path_aligned}'`
+        if zip_align != false
+          `rm -f '#{apk_path_aligned}'`
+        end
 
         apk_path_signed
       end 
@@ -367,6 +369,7 @@ module Fastlane
         clear_keystore = params[:clear_keystore]
         unit_test = params[:unit_test]
         build_tools_version = params[:build_tools_version]
+        zip_align = params[:zip_align]
 
         # Test OpenSSL/LibreSSL
         if unit_test
@@ -579,13 +582,13 @@ module Fastlane
               key_password, 
               alias_name, 
               alias_password, 
-              true, # Zip align
+              zip_align, # Zip align
               build_tools_version # Buil-tools version
             )
             puts ''
           end 
         else
-          UI.message("No APK file found to sign!")
+          UI.message("No APK file found at: #{apk_path}")
         end
 
         # Prepare contect shared values for next lanes:
@@ -662,7 +665,12 @@ module Fastlane
                                    env_name: "MATCH_KEYSTORE_BUILD_TOOLS_VERSION",
                                 description: "Set built-tools version (by default latest available on machine)",
                                    optional: true,
-                                       type: String),                             
+                                       type: String),      
+          FastlaneCore::ConfigItem.new(key: :zip_align,
+                                   env_name: "MATCH_KEYSTORE_ZIPALIGN",
+                                description: "Define if plugin will run zipalign on APK before sign it (true by default)",
+                                   optional: true,
+                                       type: Boolean),                    
           FastlaneCore::ConfigItem.new(key: :clear_keystore,
                                    env_name: "MATCH_KEYSTORE_CLEAR",
                                 description: "Clear the local keystore (false by default)",

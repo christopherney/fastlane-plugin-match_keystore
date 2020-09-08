@@ -26,7 +26,8 @@ lane :test_zip_align do |options|
     package_name: "com.match-keystore-plugin.test",
     apk_path: "assets/app-release-unsigned.apk",
     match_secret: "A-very-str0ng-password!",
-    build_tools_version: "29.0.2"
+    build_tools_version: "29.0.2",
+    zip_align: false
   )
 
 end
