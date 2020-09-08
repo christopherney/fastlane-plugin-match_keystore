@@ -12,3 +12,4 @@ coverage
 test-results
 /assets/app-release-unsigned-signed.apk
 /assets/app-release-signed.apk
+/temp/

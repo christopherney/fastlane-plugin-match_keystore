@@ -1,4 +1,5 @@
-lane :test do |options|
+
+lane :unit_test do |options|
 
   puts '--------------------------------------------------'
   puts '--- UNIT TESTS                                 ---'
@@ -11,6 +12,10 @@ lane :test do |options|
     match_secret: "A-very-str0ng-password!",
     unit_test: true
   )
+
+end
+
+lane :test do |options|
 
   puts '--------------------------------------------------'
   puts '--- First signature, test remote configuration ---'

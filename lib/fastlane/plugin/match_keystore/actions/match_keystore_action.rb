@@ -15,6 +15,11 @@ module Fastlane
 
     class MatchKeystoreAction < Action
 
+      def self.openssl_path
+        path = "/usr/local/opt/openssl@1.1/bin"
+        path
+      end
+
       def self.to_md5(value)
         hash_value = Digest::MD5.hexdigest value
         hash_value
@@ -71,18 +76,47 @@ module Fastlane
         build_tools_last_version
       end
       
-      def self.check_openssl_version
-        output = `openssl version`
+      def self.check_ssl_version(forceOpenSSL)
+        libressl_min = '2.9'
+        openssl_min = '1.1.1'
+
+        openssl = self.openssl(forceOpenSSL)
+        output = `#{openssl} version`
         if !output.start_with?("LibreSSL") && !output.start_with?("OpenSSL")
-          raise "Please install OpenSSL 1.1.1 at least https://www.openssl.org/"
+          raise "Please install OpenSSL '#{openssl_min}' at least OR LibreSSL #{libressl_min}' at least"
         end
-        UI.message("OpenSSL version: " + output.strip)
+        UI.message("SSL/TLS protocol library: '#{output.strip!}'")
+
+        # Check minimum verion:
+        vesion = output.to_str.scan(/[0-9\.]{1,}/).first
+        UI.message("SSL/TLS protocol version: '#{vesion}'")
+        if self.is_libre_ssl(forceOpenSSL)
+          if Gem::Version.new(vesion) < Gem::Version.new(libressl_min)
+            raise "Minimum version for LibreSSL is '#{libressl_min}', please update it. Use homebrew is your are Mac user, and update ~/.bah_profile or ~/.zprofile"
+          end
+        else
+          if Gem::Version.new(vesion) > Gem::Version.new(openssl_min)
+            raise "Minimum version for OpenSSL is '#{openssl_min}' please update it. Use homebrew is your are Mac user, and update ~/.bah_profile or ~/.zprofile"
+          end
+        end
+
         output.strip
       end
 
-      def self.is_libre_ssl
-        result false
-        output = `openssl version`
+      def self.openssl(forceOpenSSL)
+        if forceOpenSSL
+          path = openssl_path
+          output = "#{path}/openssl"
+        else
+          output = "openssl"
+        end
+        output
+      end
+
+      def self.is_libre_ssl(forceOpenSSL)
+        result = false
+        openssl = self.openssl(forceOpenSSL)
+        output = `#{openssl} version`
         if output.start_with?("LibreSSL")
           result = true
         end
@@ -93,17 +127,20 @@ module Fastlane
         `rm -f '#{key_path}'`
         shaValue = self.sha512(password)
         `echo "#{shaValue}" > '#{key_path}'`
-        # `echo "#{password}" | openssl dgst -sha512 | awk '{print $2}' | cut -c1-128 > '#{key_path}'`
       end
 
-      def self.encrypt_file(clear_file, encrypt_file, key_path)
+      def self.encrypt_file(clear_file, encrypt_file, key_path, forceOpenSSL)
         `rm -f '#{encrypt_file}'`
-        `openssl enc -aes-256-cbc -salt -pbkdf2 -in '#{clear_file}' -out '#{encrypt_file}' -pass file:'#{key_path}'`
+        libre_ssl = self.is_libre_ssl(forceOpenSSL)
+        openssl_bin = self.openssl(forceOpenSSL)
+        `#{openssl_bin} enc -aes-256-cbc -salt -pbkdf2 -in '#{clear_file}' -out '#{encrypt_file}' -pass file:'#{key_path}'`
       end
 
-      def self.decrypt_file(encrypt_file, clear_file, key_path)
+      def self.decrypt_file(encrypt_file, clear_file, key_path, forceOpenSSL)
         `rm -f '#{clear_file}'`
-        `openssl enc -d -aes-256-cbc -pbkdf2 -in '#{encrypt_file}' -out '#{clear_file}' -pass file:'#{key_path}'`
+        libre_ssl = self.is_libre_ssl(forceOpenSSL)
+        openssl_bin = self.openssl(forceOpenSSL)
+        `#{openssl_bin} enc -d -aes-256-cbc -pbkdf2 -in '#{encrypt_file}' -out '#{clear_file}' -pass file:'#{key_path}'`
       end
 
       def self.assert_equals(test_name, excepted, value)
@@ -118,7 +155,13 @@ module Fastlane
       end
 
       def self.test_security
-        self.check_openssl_version
+
+        self.check_ssl_version(false)
+        
+        # Clear temp files
+        temp_dir = File.join(Dir.pwd, '/temp/')
+        FileUtils.rm_rf(temp_dir)
+        Dir.mkdir(temp_dir)
 
         fakeValue = "4esfsf4dsfds!efs5ZDOJF"
         # Check MD5
@@ -132,15 +175,60 @@ module Fastlane
         self.assert_equals("SHA-512", excepted, shaValue)
 
         # Check SHA-512-File
-        tempKeyPath = File.join(Dir.pwd, '/temp/key.txt')
-        self.gen_key(tempKeyPath, fakeValue)
-        shaValue = self.get_file_content(tempKeyPath).strip!
+        key_path = File.join(Dir.pwd, '/temp/key.txt')
+        self.gen_key(key_path, fakeValue)
+        shaValue = self.get_file_content(key_path).strip!
         excepted = "cc6a7b0d89cc61c053f7018a305672bdb82bc07e5015f64bb063d9662be4ec81ec8afa819b009de266482b6bd56b7068def2524c32f5b5d4d9db49ee4578499d"
         self.assert_equals("SHA-512-File", excepted, shaValue)
-        File.delete(tempKeyPath)
+        
 
-        
-        
+        # Check LibreSSL
+        result = self.is_libre_ssl(false)
+        self.assert_equals("Is-LibreSSL", true, result)
+        result = self.is_libre_ssl(true)
+        self.assert_equals("Is-LibreSSL", false, result)
+
+        # Encrypt OpenSSL
+        clear_file = File.join(Dir.pwd, '/temp/clear.txt')
+        openssl_encrypt_file = File.join(Dir.pwd, '/temp/openssl_encrypted.txt')
+        self.content_to_file(clear_file, fakeValue)
+        self.encrypt_file(clear_file, openssl_encrypt_file, key_path, true)
+        result = File.file?(openssl_encrypt_file) && File.size(openssl_encrypt_file) > 10
+        self.assert_equals("Encrypt-OpenSSL", true, result)
+
+        # Encrypt LibreSSL
+        encrypt_file_libre = File.join(Dir.pwd, '/temp/libressl_encrypted.txt')
+        self.content_to_file(clear_file, fakeValue)
+        self.encrypt_file(clear_file, encrypt_file_libre, key_path, false)
+        result = File.file?(encrypt_file_libre) && File.size(encrypt_file_libre) > 10
+        self.assert_equals("Encrypt-LibreSSL", true, result)
+
+        # exit!
+
+        # Decrypt OpenSSL (from OpenSSL)
+        openssl_clear_file = File.join(Dir.pwd, '/temp/openssl_clear.txt')
+        self.decrypt_file(openssl_encrypt_file, openssl_clear_file, key_path, true)
+        decrypted = self.get_file_content(openssl_clear_file).strip!
+        self.assert_equals("Decrypt-OpenSSL", fakeValue, decrypted)
+
+        # Decrypt LibreSSL (from LibreSSL)
+        libressl_clear_file = File.join(Dir.pwd, '/temp/libressl_clear.txt')
+        self.decrypt_file(encrypt_file_libre, libressl_clear_file, key_path, false)
+        decrypted = self.get_file_content(libressl_clear_file).strip!
+        self.assert_equals("Decrypt-LibreSSL", fakeValue, decrypted)
+
+        # Decrypt LibreSSL (from OpenSSL)
+        libressl_clear_file = File.join(Dir.pwd, '/temp/libressl_from_openssl_clear.txt')
+        self.decrypt_file(openssl_encrypt_file, libressl_clear_file, key_path, false)
+        decrypted = self.get_file_content(libressl_clear_file).strip!
+        self.assert_equals("Decrypt-LibreSSL-from-OpenSSL", fakeValue, decrypted)
+
+        # Decrypt OpenSSL (from LibreSSL)
+        openssl_clear_file = File.join(Dir.pwd, '/temp/openssl_from_libressl_clear.txt')
+        self.decrypt_file(encrypt_file_libre, openssl_clear_file, key_path, true)
+        decrypted = self.get_file_content(openssl_clear_file).strip!
+        self.assert_equals("Decrypt-OpenSSL-from-LibreSSL", fakeValue, decrypted)
+
       end
 
       def self.sign_apk(apk_path, keystore_path, key_password, alias_name, alias_password, zip_align)
@@ -188,6 +276,10 @@ module Fastlane
           path = File.join(Dir.pwd, path)
         end
         path
+      end
+
+      def self.content_to_file(file_path, content)
+        `echo #{content} > #{file_path}`
       end
 
       def self.get_file_content(file_path)
@@ -266,7 +358,7 @@ module Fastlane
         end
 
         # Check OpenSSL:
-        self.check_openssl_version
+        self.check_ssl_version(false)
 
         # Init workign local directory:
         dir_name = ENV['HOME'] + '/.match_keystore'
@@ -412,7 +504,7 @@ module Fastlane
           out_file.puts("aliasPassword=#{alias_password}")
           out_file.close
 
-          self.encrypt_file(properties_path, properties_encrypt_path, key_path)
+          self.encrypt_file(properties_path, properties_encrypt_path, key_path, false)
           File.delete(properties_path)
 
           # Print Keystore data in repo:
@@ -429,7 +521,7 @@ module Fastlane
         else  
           UI.message "Keystore file already exists, continue..."
 
-          self.decrypt_file(properties_encrypt_path, properties_path, key_path)
+          self.decrypt_file(properties_encrypt_path, properties_path, key_path, false)
 
           properties = self.load_properties(properties_path)
           key_password = properties['keyPassword']
