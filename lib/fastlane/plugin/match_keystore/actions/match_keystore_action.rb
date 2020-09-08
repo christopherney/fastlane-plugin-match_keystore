@@ -20,6 +20,11 @@ module Fastlane
         hash_value
       end
 
+      def self.sha512(value)
+        hash_value = Digest::SHA512.hexdigest value
+        hash_value
+      end
+
       def self.load_json(json_path)
         file = File.read(json_path)
         data_hash = JSON.parse(file)
@@ -68,15 +73,27 @@ module Fastlane
       
       def self.check_openssl_version
         output = `openssl version`
-        if !output.start_with?("OpenSSL")
+        if !output.start_with?("LibreSSL") && !output.start_with?("OpenSSL")
           raise "Please install OpenSSL 1.1.1 at least https://www.openssl.org/"
         end
         UI.message("OpenSSL version: " + output.strip)
+        output.strip
+      end
+
+      def self.is_libre_ssl
+        result false
+        output = `openssl version`
+        if output.start_with?("LibreSSL")
+          result = true
+        end
+        result
       end
 
       def self.gen_key(key_path, password)
         `rm -f '#{key_path}'`
-        `echo "#{password}" | openssl dgst -sha512 | awk '{print $2}' | cut -c1-128 > '#{key_path}'`
+        shaValue = self.sha512(password)
+        `echo "#{shaValue}" > '#{key_path}'`
+        # `echo "#{password}" | openssl dgst -sha512 | awk '{print $2}' | cut -c1-128 > '#{key_path}'`
       end
 
       def self.encrypt_file(clear_file, encrypt_file, key_path)
@@ -87,6 +104,43 @@ module Fastlane
       def self.decrypt_file(encrypt_file, clear_file, key_path)
         `rm -f '#{clear_file}'`
         `openssl enc -d -aes-256-cbc -pbkdf2 -in '#{encrypt_file}' -out '#{clear_file}' -pass file:'#{key_path}'`
+      end
+
+      def self.assert_equals(test_name, excepted, value)
+        puts "Unit Test: #{test_name}"
+        if value != excepted
+          puts " - Excepted: #{excepted}"
+          puts " - Returned: #{value}"
+          raise "Unit Test - #{test_name} error!"
+        else
+          puts " - OK"
+        end
+      end
+
+      def self.test_security
+        self.check_openssl_version
+
+        fakeValue = "4esfsf4dsfds!efs5ZDOJF"
+        # Check MD5
+        md5value = self.to_md5(fakeValue)
+        excepted = "1c815cd208fe08076c9e7b6595d121d1"
+        self.assert_equals("MD5", excepted, md5value)
+
+        # Check SHA-512
+        shaValue = self.sha512(fakeValue)
+        excepted = "cc6a7b0d89cc61c053f7018a305672bdb82bc07e5015f64bb063d9662be4ec81ec8afa819b009de266482b6bd56b7068def2524c32f5b5d4d9db49ee4578499d"
+        self.assert_equals("SHA-512", excepted, shaValue)
+
+        # Check SHA-512-File
+        tempKeyPath = File.join(Dir.pwd, '/temp/key.txt')
+        self.gen_key(tempKeyPath, fakeValue)
+        shaValue = self.get_file_content(tempKeyPath).strip!
+        excepted = "cc6a7b0d89cc61c053f7018a305672bdb82bc07e5015f64bb063d9662be4ec81ec8afa819b009de266482b6bd56b7068def2524c32f5b5d4d9db49ee4578499d"
+        self.assert_equals("SHA-512-File", excepted, shaValue)
+        File.delete(tempKeyPath)
+
+        
+        
       end
 
       def self.sign_apk(apk_path, keystore_path, key_password, alias_name, alias_password, zip_align)
@@ -100,6 +154,10 @@ module Fastlane
           `rm -f '#{apk_path_aligned}'`
           UI.message("Aligning APK (zipalign): #{apk_path_aligned}")
           `#{build_tools_path}zipalign -f -v 4 '#{apk_path}' '#{apk_path_aligned}'`
+
+          if !File.file?(apk_path_aligned)
+            raise "Aligned APK not exsits!"
+          end
         else
           UI.message("No zip align!")
           apk_path_aligned = apk_path
@@ -110,12 +168,26 @@ module Fastlane
 
         # https://developer.android.com/studio/command-line/apksigner
         `rm -f '#{apk_path_signed}'`
-        `#{build_tools_path}apksigner sign --ks '#{keystore_path}' --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true --out '#{apk_path_signed}' '#{apk_path_aligned}'`
+        `#{build_tools_path}apksigner sign --ks '#{keystore_path}' --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true --v4-signing-enabled false --out '#{apk_path_signed}' '#{apk_path_aligned}'`
         
         `#{build_tools_path}apksigner verify '#{apk_path_signed}'`
         `rm -f '#{apk_path_aligned}'`
 
         apk_path_signed
+      end 
+
+      def self.resolve_dir(path)
+        if !File.directory?(path)
+          path = File.join(Dir.pwd, path)
+        end
+        path
+      end
+
+      def self.resolve_file(path)
+        if !File.file?(path)
+          path = File.join(Dir.pwd, path)
+        end
+        path
       end
 
       def self.get_file_content(file_path)
@@ -132,9 +204,7 @@ module Fastlane
 
         if !apk_path.to_s.end_with?(".apk") 
 
-          if !File.directory?(apk_path)
-            apk_path = File.join(Dir.pwd, apk_path)
-          end
+          apk_path = self.resolve_dir(apk_path)
 
           pattern = File.join(apk_path, '*.apk')
           files = Dir[pattern]
@@ -147,11 +217,7 @@ module Fastlane
           end
 
         else
-
-          if !File.file?(apk_path)
-            apk_path = File.join(Dir.pwd, apk_path)
-          end
-
+          apk_path = self.resolve_file(apk_path)
         end
         
         apk_path
@@ -177,6 +243,14 @@ module Fastlane
         match_secret = params[:match_secret]
         override_keystore = params[:override_keystore]
         keystore_data = params[:keystore_data]
+        clear_keystore = params[:clear_keystore]
+        unit_test = params[:unit_test]
+
+        # Test OpenSSL/LibreSSL
+        if unit_test
+          result_test = self.test_security
+          exit!
+        end
 
         # Init constants:
         keystore_name = 'keystore.jks'
@@ -222,13 +296,29 @@ module Fastlane
           raise "The security key '#{key_name}' is malformed, or not initialized!"
         end
 
-        # Create repo directory to sync remote Keystores repository:
+        # Clear repo Keystore (local) - mostly for testing:
         repo_dir = File.join(dir_name, self.to_md5(git_url))
-        # UI.message(repo_dir)
+        if clear_keystore && File.directory?(repo_dir)
+          FileUtils.rm_rf(repo_dir)
+          UI.message("Local repo keystore (#{repo_dir}) directory deleted!")
+        end
+
+        # Create repo directory to sync remote Keystores repository:
         unless File.directory?(repo_dir)
           UI.message("Creating 'repo' directory...")
           FileUtils.mkdir_p(repo_dir)
         end
+
+        # Check if package name defined:
+        if package_name.to_s.strip.empty?
+          raise "Package name is not defined!"
+        end
+
+        # Define paths:
+        keystoreAppDir = File.join(repo_dir, package_name)
+        keystore_path = File.join(keystoreAppDir, keystore_name)
+        properties_path = File.join(keystoreAppDir, properties_name)
+        properties_encrypt_path = File.join(keystoreAppDir, properties_encrypt_name)
 
         # Cloning/pulling GIT remote repository:
         gitDir = File.join(repo_dir, '/.git')
@@ -243,20 +333,6 @@ module Fastlane
           `cd #{repo_dir} && git pull`
           puts ''
         end
-
-        # Create sub-directory for Android app:
-        if package_name.to_s.strip.empty?
-          raise "Package name is not defined!"
-        end
-        keystoreAppDir = File.join(repo_dir, package_name)
-        unless File.directory?(keystoreAppDir)
-          UI.message("Creating '#{package_name}' keystore directory...")
-          FileUtils.mkdir_p(keystoreAppDir)
-        end
-
-        keystore_path = File.join(keystoreAppDir, keystore_name)
-        properties_path = File.join(keystoreAppDir, properties_name)
-        properties_encrypt_path = File.join(keystoreAppDir, properties_encrypt_name)
 
         # Load parameters from JSON for CI or Unit Tests:
         if keystore_data != nil && File.file?(keystore_data)
@@ -274,6 +350,7 @@ module Fastlane
 
         # Create keystore with command
         override_keystore = !existing_keystore.to_s.strip.empty? && File.file?(existing_keystore)
+        UI.message("Existing Keystore: #{existing_keystore}")
         if !File.file?(keystore_path) || override_keystore 
 
           if File.file?(keystore_path)
@@ -294,7 +371,7 @@ module Fastlane
           end
 
           # https://developer.android.com/studio/publish/app-signing
-          if !File.file?(existing_keystore)
+          if existing_keystore.to_s.strip.empty? || !File.file?(existing_keystore)
             UI.message("Generating Android Keystore...")
             
             full_name = self.prompt2(text: "Certificate First and Last Name: ", value: data_full_name)
@@ -457,7 +534,17 @@ module Fastlane
                                    env_name: "MATCH_KEYSTORE_JSON_PATH",
                                 description: "Required data to import an existing keystore, or create a new one",
                                    optional: true,
-                                       type: String)
+                                       type: String),
+          FastlaneCore::ConfigItem.new(key: :clear_keystore,
+                                   env_name: "MATCH_KEYSTORE_CLEAR",
+                                description: "Clear the local keystore (false by default)",
+                                   optional: true,
+                                       type: Boolean),
+          FastlaneCore::ConfigItem.new(key: :unit_test,
+                                  env_name: "MATCH_KEYSTORE_UNIT_TESTS",
+                                description: "launch Unit Tests (false by default)",
+                                  optional: true,
+                                      type: Boolean)
         ]
       end
 

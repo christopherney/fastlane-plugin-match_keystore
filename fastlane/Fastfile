@@ -1,7 +1,35 @@
 lane :test do |options|
+
+  puts '--------------------------------------------------'
+  puts '--- UNIT TESTS                                 ---'
+  puts '--------------------------------------------------'
+
+  match_keystore(
+    git_url: "https://github.com/christopherney/fake-keystores",
+    package_name: "com.match-keystore-plugin.test",
+    apk_path: "assets/app-release-unsigned.apk",
+    match_secret: "A-very-str0ng-password!",
+    unit_test: true
+  )
+
+  puts '--------------------------------------------------'
+  puts '--- First signature, test remote configuration ---'
+  puts '--------------------------------------------------'
+
+  match_keystore(
+    git_url: "https://github.com/christopherney/fake-keystores",
+    package_name: "com.match-keystore-plugin.test",
+    apk_path: "assets/app-release-unsigned.apk",
+    match_secret: "A-very-str0ng-password!",
+    clear_keystore: true
+  )
+
+  puts 'Keystore Path: ' + lane_context[SharedValues::MATCH_KEYSTORE_PATH]
+  puts 'Keystore Alias Name: ' + lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_NAME]
+  puts 'Signed APK: ' + lane_context[SharedValues::MATCH_KEYSTORE_APK_SIGNED]
   
   puts '------------------------------------------------------'
-  puts '--- First signature, test existing keystore import ---'
+  puts '--- Second signature, override keystore            ---'
   puts '------------------------------------------------------'
 
   match_keystore(
@@ -19,7 +47,7 @@ lane :test do |options|
   puts 'Signed APK: ' + lane_context[SharedValues::MATCH_KEYSTORE_APK_SIGNED]
 
   puts '--------------------------------------------------'
-  puts '--- Second signature, test local configuration ---'
+  puts '--- Third signature, test local configuration ---'
   puts '--------------------------------------------------'
 
   match_keystore(
