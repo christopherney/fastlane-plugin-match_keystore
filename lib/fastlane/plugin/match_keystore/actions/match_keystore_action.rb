@@ -240,12 +240,15 @@ module Fastlane
         if zip_align == true
           apk_path_aligned = apk_path.gsub(".apk", "-aligned.apk")
           `rm -f '#{apk_path_aligned}'`
-          UI.message("Aligning APK (zipalign): #{apk_path_aligned}")
-          `#{build_tools_path}zipalign -f -v 4 '#{apk_path}' '#{apk_path_aligned}'`
+          UI.message("Aligning APK (zipalign): #{apk_path}")
+          output = `#{build_tools_path}zipalign -v 4 '#{apk_path}' '#{apk_path_aligned}'`
+          puts ""
+          puts output
 
           if !File.file?(apk_path_aligned)
-            raise "Aligned APK not exsits!"
+            raise "Aligned APK not exists!"
           end
+
         else
           UI.message("No zip align!")
           apk_path_aligned = apk_path
@@ -256,9 +259,15 @@ module Fastlane
 
         # https://developer.android.com/studio/command-line/apksigner
         `rm -f '#{apk_path_signed}'`
-        `#{build_tools_path}apksigner sign --ks '#{keystore_path}' --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true --v4-signing-enabled false --out '#{apk_path_signed}' '#{apk_path_aligned}'`
-        
-        `#{build_tools_path}apksigner verify '#{apk_path_signed}'`
+        UI.message("Signing APK: #{apk_path_aligned}")
+        output = `#{build_tools_path}apksigner sign --ks '#{keystore_path}' --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true --v4-signing-enabled false --out '#{apk_path_signed}' '#{apk_path_aligned}'`
+        puts ""
+        puts output
+
+        UI.message("Verifing APK signature: #{apk_path_signed}")
+        output = `#{build_tools_path}apksigner verify '#{apk_path_signed}'`
+        puts ""
+        puts output
         `rm -f '#{apk_path_aligned}'`
 
         apk_path_signed
