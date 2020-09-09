@@ -2,6 +2,7 @@ require 'fastlane/action'
 require 'fileutils'
 require 'os'
 require 'json'
+require 'pry'
 require 'digest'
 require_relative '../helper/match_keystore_helper'
 
@@ -137,10 +138,15 @@ module Fastlane
         result
       end
 
-      def self.gen_key(key_path, password)
+      def self.gen_key(key_path, password, compat_key)
         `rm -f '#{key_path}'`
         shaValue = self.sha512(password)
-        `echo "#{shaValue}" > '#{key_path}'`
+        # Backward-compatibility
+        if compat_key == "1"
+          `echo "#{password}" | openssl dgst -sha512 | awk '{print $2}' | cut -c1-128 > '#{key_path}'`
+        else
+          `echo "#{shaValue}" > '#{key_path}'`
+        end
       end
 
       def self.encrypt_file(clear_file, encrypt_file, key_path, forceOpenSSL)
@@ -190,7 +196,7 @@ module Fastlane
 
         # Check SHA-512-File
         key_path = File.join(Dir.pwd, '/temp/key.txt')
-        self.gen_key(key_path, fakeValue)
+        self.gen_key(key_path, fakeValue, false)
         shaValue = self.get_file_content(key_path).strip!
         excepted = "cc6a7b0d89cc61c053f7018a305672bdb82bc07e5015f64bb063d9662be4ec81ec8afa819b009de266482b6bd56b7068def2524c32f5b5d4d9db49ee4578499d"
         self.assert_equals("SHA-512-File", excepted, shaValue)
@@ -370,6 +376,7 @@ module Fastlane
         unit_test = params[:unit_test]
         build_tools_version = params[:build_tools_version]
         zip_align = params[:zip_align]
+        compat_key = params[:compat_key]
 
         # Test OpenSSL/LibreSSL
         if unit_test
@@ -410,7 +417,7 @@ module Fastlane
             raise "Security password is not defined! Please use 'match_secret' parameter for CI."
           end
           UI.message "Generating security key '#{key_name}'..."
-          self.gen_key(key_path, security_password)
+          self.gen_key(key_path, security_password, compat_key)
         end
 
         # Check is 'security password' is well initialized:
@@ -557,6 +564,7 @@ module Fastlane
           self.decrypt_file(properties_encrypt_path, properties_path, key_path, false)
 
           properties = self.load_properties(properties_path)
+          Pry::ColorPrinter.pp(properties)
           key_password = properties['keyPassword']
           alias_name = properties['aliasName']
           alias_password = properties['aliasPassword']
@@ -671,16 +679,21 @@ module Fastlane
                                 description: "Define if plugin will run zipalign on APK before sign it (true by default)",
                                    optional: true,
                                        type: Boolean),                    
+          FastlaneCore::ConfigItem.new(key: :compat_key,
+                                   env_name: "MATCH_KEYSTORE_COMPAT_KEY",
+                                description: "Define the compatibility key version used on local machine (nil by default)",
+                                   optional: true,
+                                       type: String),
           FastlaneCore::ConfigItem.new(key: :clear_keystore,
                                    env_name: "MATCH_KEYSTORE_CLEAR",
                                 description: "Clear the local keystore (false by default)",
                                    optional: true,
                                        type: Boolean),
           FastlaneCore::ConfigItem.new(key: :unit_test,
-                                  env_name: "MATCH_KEYSTORE_UNIT_TESTS",
+                                   env_name: "MATCH_KEYSTORE_UNIT_TESTS",
                                 description: "launch Unit Tests (false by default)",
-                                  optional: true,
-                                      type: Boolean)
+                                   optional: true,
+                                       type: Boolean)
         ]
       end
 
