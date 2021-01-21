@@ -1,4 +1,21 @@
 
+lane :temp do |options|
+
+  puts '--------------------------------------------------'
+  puts '--- UNIT TESTS                                 ---'
+  puts '--------------------------------------------------'
+
+  match_keystore(
+    git_url: "https://bitbucket.org/SoClipTeam/keystores.git",
+    package_name: "com.soclip.sdksamplecode",
+    apk_path: "assets/app-release-unsigned.apk",
+    match_secret: ENV["MATCH_KEYSTORE_PASSWORD"],
+    zip_align: false,
+    compat_key: "1"
+  )
+
+end
+
 lane :unit_test do |options|
 
   puts '--------------------------------------------------'

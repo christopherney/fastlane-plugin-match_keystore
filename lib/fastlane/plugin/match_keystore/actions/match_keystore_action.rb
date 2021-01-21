@@ -16,10 +16,8 @@ module Fastlane
 
     class MatchKeystoreAction < Action
 
-      def self.openssl_path
-        path = "/usr/local/opt/openssl@1.1/bin"
-        path
-      end
+      KEY_VERSION = "2"
+      OPENSSL_BIN_PATH_MAC = "/usr/local/opt/openssl@1.1/bin"
 
       def self.to_md5(value)
         hash_value = Digest::MD5.hexdigest value
@@ -120,8 +118,7 @@ module Fastlane
 
       def self.openssl(forceOpenSSL)
         if forceOpenSSL
-          path = openssl_path
-          output = "#{path}/openssl"
+          output = "#{self.OPENSSL_BIN_PATH_MAC}/openssl"
         else
           output = "openssl"
         end
@@ -400,6 +397,11 @@ module Fastlane
         # Check OpenSSL:
         self.check_ssl_version(false)
 
+        # Check is backward-compatibility is required:
+        if !compat_key.to_s.strip.empty?
+          UI.message("Compatiblity version: #{compat_key}")
+        end
+
         # Init workign local directory:
         dir_name = ENV['HOME'] + '/.match_keystore'
         unless File.directory?(dir_name)
@@ -408,7 +410,11 @@ module Fastlane
         end
 
         # Init 'security password' for AES encryption:
-        key_name = "#{self.to_md5(git_url)}.hex"
+        if compat_key == "1"
+          key_name = "#{self.to_md5(git_url)}.hex"
+        else
+          key_name = "#{self.to_md5(git_url)}-#{self.KEY_VERSION}.hex"
+        end
         key_path = File.join(dir_name, key_name)
         # UI.message(key_path)
         if !File.file?(key_path)
