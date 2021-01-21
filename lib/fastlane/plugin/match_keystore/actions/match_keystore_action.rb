@@ -253,12 +253,35 @@ module Fastlane
         build_tools_path = self.get_build_tools(version_targeted)
         UI.message("Build-tools path: #{build_tools_path}")
 
+        # https://developer.android.com/studio/command-line/apksigner
+        apk_path_signed = apk_path.gsub(".apk", "-signed.apk")
+        apk_path_signed = apk_path_signed.gsub("unsigned", "")
+        apk_path_signed = apk_path_signed.gsub("--", "-")
+        `rm -f '#{apk_path_signed}'`
+
+        UI.message("Signing APK (input): #{apk_path}")
+        apksigner_opts = ""
+        build_tools_version = self.get_build_tools_version(version_targeted)
+        UI.message("Build-tools version: #{build_tools_version}")
+        if Gem::Version.new(build_tools_version) >= Gem::Version.new('30')
+          apksigner_opts = "--v4-signing-enabled false "
+        end
+        output = `#{build_tools_path}apksigner sign --ks '#{keystore_path}' --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true #{apksigner_opts}--out '#{apk_path_signed}' '#{apk_path}'`
+        puts ""
+        puts output
+
+        UI.message("Verifing APK signature (output): #{apk_path_signed}")
+        output = `#{build_tools_path}apksigner verify '#{apk_path_signed}'`
+        puts ""
+        puts output
+
+
         # https://developer.android.com/studio/command-line/zipalign
         if zip_align != false
-          apk_path_aligned = apk_path.gsub(".apk", "-aligned.apk")
+          apk_path_aligned = apk_path_signed.gsub(".apk", "-aligned.apk")
           `rm -f '#{apk_path_aligned}'`
           UI.message("Aligning APK (zipalign): #{apk_path}")
-          output = `#{build_tools_path}zipalign -v 4 '#{apk_path}' '#{apk_path_aligned}'`
+          output = `#{build_tools_path}zipalign -v 4 '#{apk_path_signed}' '#{apk_path_aligned}'`
           puts ""
           puts output
 
@@ -266,33 +289,11 @@ module Fastlane
             raise "Aligned APK not exists!"
           end
 
+          `rm -f '#{apk_path_signed}'`
+          apk_path_signed = apk_path_aligned
+  
         else
           UI.message("No zip align - deactivated via parameter!")
-          apk_path_aligned = apk_path
-        end
-        apk_path_signed = apk_path.gsub(".apk", "-signed.apk")
-        apk_path_signed = apk_path_signed.gsub("unsigned", "")
-        apk_path_signed = apk_path_signed.gsub("--", "-")
-
-        # https://developer.android.com/studio/command-line/apksigner
-        `rm -f '#{apk_path_signed}'`
-        UI.message("Signing APK: #{apk_path_aligned}")
-        apksigner_opts = ""
-        build_tools_version = self.get_build_tools_version(version_targeted)
-        UI.message("Build-tools version: #{build_tools_version}")
-        if Gem::Version.new(build_tools_version) >= Gem::Version.new('30')
-          apksigner_opts = "--v4-signing-enabled false "
-        end
-        output = `#{build_tools_path}apksigner sign --ks '#{keystore_path}' --ks-key-alias '#{alias_name}' --ks-pass pass:'#{key_password}' --key-pass pass:'#{alias_password}' --v1-signing-enabled true --v2-signing-enabled true #{apksigner_opts}--out '#{apk_path_signed}' '#{apk_path_aligned}'`
-        puts ""
-        puts output
-
-        UI.message("Verifing APK signature: #{apk_path_signed}")
-        output = `#{build_tools_path}apksigner verify '#{apk_path_signed}'`
-        puts ""
-        puts output
-        if zip_align != false
-          `rm -f '#{apk_path_aligned}'`
         end
 
         apk_path_signed
