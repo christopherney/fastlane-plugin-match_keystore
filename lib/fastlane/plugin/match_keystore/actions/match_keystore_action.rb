@@ -118,7 +118,7 @@ module Fastlane
 
       def self.openssl(forceOpenSSL)
         if forceOpenSSL
-          output = "#{self.OPENSSL_BIN_PATH_MAC}/openssl"
+          output = "#{self::OPENSSL_BIN_PATH_MAC}/openssl"
         else
           output = "openssl"
         end
@@ -414,7 +414,7 @@ module Fastlane
         if compat_key == "1"
           key_name = "#{self.to_md5(git_url)}.hex"
         else
-          key_name = "#{self.to_md5(git_url)}-#{self.KEY_VERSION}.hex"
+          key_name = "#{self.to_md5(git_url)}-#{self::KEY_VERSION}.hex"
         end
         key_path = File.join(dir_name, key_name)
         # UI.message(key_path)
@@ -463,14 +463,10 @@ module Fastlane
         gitDir = File.join(repo_dir, '/.git')
         if !File.directory?(gitDir)
           UI.message("Cloning remote Keystores repository...")
-          puts ''
           `git clone #{git_url} #{repo_dir}`
-          puts ''
         else
           UI.message("Pulling remote Keystores repository...")
-          puts ''
           `cd #{repo_dir} && git pull`
-          puts ''
         end
 
         # Load parameters from JSON for CI or Unit Tests:
