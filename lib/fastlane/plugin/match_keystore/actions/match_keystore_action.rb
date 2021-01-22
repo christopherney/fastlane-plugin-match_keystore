@@ -280,7 +280,7 @@ module Fastlane
         if zip_align != false
           apk_path_aligned = apk_path_signed.gsub(".apk", "-aligned.apk")
           `rm -f '#{apk_path_aligned}'`
-          UI.message("Aligning APK (zipalign): #{apk_path}")
+          UI.message("Aligning APK (zipalign): #{apk_path_signed}")
           output = `#{build_tools_path}zipalign -v 4 '#{apk_path_signed}' '#{apk_path_aligned}'`
           puts ""
           puts output
@@ -567,7 +567,7 @@ module Fastlane
           self.decrypt_file(properties_encrypt_path, properties_path, key_path, false)
 
           properties = self.load_properties(properties_path)
-          Pry::ColorPrinter.pp(properties)
+          # Pry::ColorPrinter.pp(properties)
           key_password = properties['keyPassword']
           alias_name = properties['aliasName']
           alias_password = properties['aliasPassword']
