@@ -12,6 +12,7 @@ module Fastlane
       MATCH_KEYSTORE_PATH = :MATCH_KEYSTORE_PATH
       MATCH_KEYSTORE_ALIAS_NAME = :MATCH_KEYSTORE_ALIAS_NAME
       MATCH_KEYSTORE_APK_SIGNED = :MATCH_KEYSTORE_APK_SIGNED
+      MATCH_KEYSTORE_AAB_SIGNED = :MATCH_KEYSTORE_AAB_SIGNED
     end
 
     class MatchKeystoreAction < Action
@@ -299,6 +300,22 @@ module Fastlane
         apk_path_signed
       end 
 
+      def self.sign_aab(aab_path, keystore_path, key_password, alias_name, alias_password)
+
+        aab_path_signed = aab_path.gsub('.aab', '-signed.aab')
+        aab_path_signed = aab_path_signed.gsub('unsigned', '')
+        aab_path_signed = aab_path_signed.gsub('--', '-')
+        `rm -f '#{aab_path_signed}'`
+
+        UI.message("Signing AAB (input): #{aab_path}")
+        aabsigner_opts = ""
+        output = `jarsigner -keystore '#{keystore_path}' -storepass '#{key_password}' -keypass '#{alias_password}' -signedjar '#{aab_path_signed}' '#{aab_path}' '#{alias_name}'`
+        puts ""
+        puts output
+
+        aab_path_signed
+      end
+
       def self.resolve_dir(path)
         if !File.directory?(path)
           path = File.join(Dir.pwd, path)
@@ -320,6 +337,34 @@ module Fastlane
       def self.get_file_content(file_path)
         data = File.read(file_path)
         data
+      end
+
+      def self.resolve_aab_path(aab_path)
+
+        # Set default AAB path if not set:
+        if aab_path.to_s.strip.empty?
+          aab_path = '/app/build/outputs/bundle/release/'
+        end
+
+        if !aab_path.to_s.end_with?('.aab')
+
+          aab_path = self.resolve_dir(aab_path)
+
+          pattern = File.join(aab_path, '*.aab')
+          files = Dir[pattern]
+
+          for file in files
+            if file.to_s.end_with?('.aab') && !file.to_s.end_with?("-signed.aab")
+              apk_path = file
+              break
+            end
+          end
+
+        else
+          aab_path = self.resolve_file(aab_path)
+        end
+
+        aab_path
       end
 
       def self.resolve_apk_path(apk_path)
@@ -366,6 +411,7 @@ module Fastlane
         git_url = params[:git_url]
         package_name = params[:package_name]
         apk_path = params[:apk_path]
+        aab_path = params[:aab_path]
         existing_keystore = params[:existing_keystore]
         match_secret = params[:match_secret]
         override_keystore = params[:override_keystore]
@@ -575,13 +621,13 @@ module Fastlane
           File.delete(properties_path)
         end
 
-        # Resolve path to the APK to sign:
-        output_signed_apk = ''
-        apk_path = self.resolve_apk_path(apk_path)
-
         # Sign APK:
-        if File.file?(apk_path)
+        if apk_path && File.file?(apk_path)
           UI.message("APK to sign: " + apk_path)
+        
+          # Resolve path to the APK to sign:
+          output_signed_apk = ''
+          apk_path = self.resolve_apk_path(apk_path)
 
           if File.file?(keystore_path)
 
@@ -598,16 +644,44 @@ module Fastlane
             )
             puts ''
           end 
+
+          # Prepare contect shared values for next lanes:
+          Actions.lane_context[SharedValues::MATCH_KEYSTORE_PATH] = keystore_path
+          Actions.lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_NAME] = alias_name
+          Actions.lane_context[SharedValues::MATCH_KEYSTORE_APK_SIGNED] = output_signed_apk
+
+          output_signed_apk
+        # Sign AAB
+        elsif aab_path && File.file?(aab_path)
+          UI.message('AAB to sign: '+ aab_path)
+
+          # Resolve path to the AAB to sign:
+          output_signed_aab = ''
+          aab_path = self.resolve_aab_path(aab_path)
+
+          if File.file?(keystore_path)
+
+            UI.message("Signing the AAB...")
+            puts ''
+            output_signed_aab = self.sign_aab(
+              aab_path, 
+              keystore_path, 
+              key_password, 
+              alias_name, 
+              alias_password
+            )
+            puts ''
+          end 
+
+          # Prepare contect shared values for next lanes:
+          Actions.lane_context[SharedValues::MATCH_KEYSTORE_PATH] = keystore_path
+          Actions.lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_NAME] = alias_name
+          Actions.lane_context[SharedValues::MATCH_KEYSTORE_AAB_SIGNED] = output_signed_aab
+
+          output_signed_aab
         else
-          UI.message("No APK file found at: #{apk_path}")
+          UI.message("No APK or AAB file found")
         end
-
-        # Prepare contect shared values for next lanes:
-        Actions.lane_context[SharedValues::MATCH_KEYSTORE_PATH] = keystore_path
-        Actions.lane_context[SharedValues::MATCH_KEYSTORE_ALIAS_NAME] = alias_name
-        Actions.lane_context[SharedValues::MATCH_KEYSTORE_APK_SIGNED] = output_signed_apk
-
-        output_signed_apk
       end
 
       def self.description
@@ -615,7 +689,7 @@ module Fastlane
       end
 
       def self.authors
-        ["Christopher NEY"]
+        ["Christopher NEY", "Simon Scherzinger"]
       end
 
       def self.return_value
@@ -626,7 +700,8 @@ module Fastlane
         [
           ['MATCH_KEYSTORE_PATH', 'File path of the Keystore fot the App.'],
           ['MATCH_KEYSTORE_ALIAS_NAME', 'Keystore Alias Name.'],
-          ['MATCH_KEYSTORE_APK_SIGNED', 'Path of the signed APK.']
+          ['MATCH_KEYSTORE_APK_SIGNED', 'Path of the signed APK.'],
+          ['MATCH_KEYSTORE_AAB_SIGNED', 'Path of the signed AAB.']
         ]
       end
 
@@ -650,6 +725,11 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :apk_path,
                                    env_name: "MATCH_KEYSTORE_APK_PATH",
                                 description: "Path of the APK file to sign",
+                                   optional: true,
+                                       type: String),
+          FastlaneCore::ConfigItem.new(key: :aab_path,
+                                   env_name: "MATCH_KEYSTORE_AAB_PATH",
+                                description: "Path of the AAB file to sign",
                                    optional: true,
                                        type: String),
           FastlaneCore::ConfigItem.new(key: :match_secret,

@@ -50,6 +50,8 @@ The keystore properties are encrypted with AES in order to secure sensitive data
   end
 ```
 
+You can build aab files as well by providing an `aab_path` instead of an `apk_path`.
+
 ## Example
 
 Check out the [example `Fastfile`](fastlane/Fastfile) to see how to use this plugin. Try it by cloning the repo, running `fastlane install_plugins` and `bundle exec fastlane test`.
