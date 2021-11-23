@@ -2,7 +2,6 @@ require 'fastlane/action'
 require 'fileutils'
 require 'os'
 require 'json'
-require 'pry'
 require 'digest'
 require_relative '../helper/match_keystore_helper'
 
